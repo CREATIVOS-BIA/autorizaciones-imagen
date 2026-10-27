@@ -39,7 +39,23 @@
   h1 { font-size: 20px; font-weight: 700; margin: 0 0 4px; letter-spacing: -.01em; }
   h3 { font-size: 16px; font-weight: 700; margin: 28px 0 4px; }
   .sub { color: var(--suave); margin: 0 0 16px; }
-  .aviso { font-size: 13px; color: var(--suave); border-left: 3px solid var(--linea); padding: 4px 0 4px 12px; margin: 0 0 20px; }
+  .tutorial { border: 1px solid var(--linea); border-radius: 10px; padding: 4px 20px 16px; margin: 0 0 8px; background: rgba(255,255,255,.9); }
+  .tutorial h3 { margin-top: 16px; }
+  .pasos { margin: 8px 0 14px; padding-left: 20px; font-size: 14px; }
+  .pasos li { margin-bottom: 6px; }
+  .ubicacion { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding: 12px 14px; border-radius: 8px; background: var(--relleno); }
+  .ubicacion.ok { background: #ecfdf3; }
+  .ubicacion.mal { background: #fef3f2; }
+  .estado-ubicacion { margin: 0; flex: 1 1 240px; font-size: 14px; font-weight: 600; }
+  .ubicacion.ok .estado-ubicacion { color: var(--ok); }
+  .ubicacion.mal .estado-ubicacion { color: var(--error); }
+  button.secundario { padding: 10px 14px; border: 0; border-radius: 8px; background: var(--tinta); color: #fff; font: 600 14px/1.2 Geist, Arial, sans-serif; cursor: pointer; }
+  button.secundario:disabled { opacity: .5; cursor: default; }
+  .ayuda { flex-basis: 100%; font-size: 13px; }
+  .ayuda summary { cursor: pointer; font-weight: 600; }
+  .ayuda ul { margin: 8px 0 0; padding-left: 18px; }
+  .ayuda li { margin-bottom: 4px; }
+  .legal { font-size: 11.5px; line-height: 1.5; color: var(--suave); text-align: justify; margin: 14px 0 0; }
   label { display: block; font-size: 13px; font-weight: 600; margin: 14px 0 6px; }
   input[type=text], input[type=email], input[type=tel], select { width: 100%; padding: 12px; border: 1px solid var(--linea); border-radius: 8px; font: inherit; background: #fff; color: var(--tinta); }
   input:focus, select:focus { outline: 2px solid var(--tinta); outline-offset: 1px; }
@@ -108,7 +124,36 @@
     <div id="paso-firma">
       <h1>Autorización de uso de imagen</h1>
       <p class="sub">Llena tus datos y firma. Abajo verás cómo va quedando tu documento.</p>
-      <p class="aviso">Para que tu firma tenga validez, al firmar guardamos la fecha y hora, la dirección IP y la ubicación aproximada de tu conexión, el tipo de dispositivo y navegador, y tu ubicación exacta si nos das permiso.</p>
+      <section class="tutorial" aria-labelledby="titulo-tutorial">
+        <h3 id="titulo-tutorial">Antes de firmar</h3>
+        <ol class="pasos">
+          <li><b>Activa tu ubicación.</b> Para hacer efectiva tu firma necesitamos que aceptes el uso de la ubicación de tu dispositivo.</li>
+          <li><b>Llena tus datos.</b> El documento de abajo se va completando mientras escribes.</li>
+          <li><b>Firma</b> dibujando con el dedo o el mouse, o subiendo una imagen de tu firma.</li>
+          <li><b>Lee el documento completo y acepta</b> al final.</li>
+        </ol>
+
+        <div class="ubicacion" id="caja-ubicacion">
+          <p class="estado-ubicacion" id="estado-ubicacion" role="status">Tu ubicación todavía no está activada.</p>
+          <button type="button" class="secundario" id="activar-ubicacion">Activar mi ubicación</button>
+          <details class="ayuda oculto" id="ayuda-ubicacion">
+            <summary>¿Bloqueaste la ubicación? Así la activas</summary>
+            <ul>
+              <li><b>iPhone (Safari):</b> Ajustes › Privacidad y seguridad › Localización › activa la localización y en Safari elige «Mientras se usa la app». Luego recarga esta página.</li>
+              <li><b>Android (Chrome):</b> toca el candado junto a la dirección de la página › Permisos › Ubicación › Permitir. Revisa también que la ubicación del celular esté encendida.</li>
+              <li><b>Computador:</b> haz clic en el candado junto a la dirección de la página › Ubicación › Permitir, y recarga la página.</li>
+            </ul>
+          </details>
+        </div>
+
+        <p class="legal"><b>Aviso de validez de la firma electrónica y tratamiento de datos.</b>
+          Al firmar por este medio aceptas que tu firma electrónica tiene la misma validez y efectos jurídicos que tu firma manuscrita,
+          conforme a la Ley 527 de 1999 y el Decreto 2364 de 2012. Para garantizar la autenticidad e integridad de la firma,
+          Bia Services S.A.S. registrará la fecha y hora, la dirección IP, la ubicación geográfica de tu dispositivo, el tipo de
+          dispositivo y navegador, y una huella digital del documento firmado. Estos datos se usarán únicamente como evidencia de la
+          firma y se tratarán conforme a la Ley 1581 de 2012 y la política de tratamiento de datos personales de Bia. Como titular,
+          puedes conocer, actualizar, rectificar y suprimir tus datos a través de los canales de atención de Bia.</p>
+      </section>
 
       <form id="formulario" novalidate>
         <h3>Tus datos</h3>
@@ -246,24 +291,52 @@
     .catch(() => fetch('https://api.ipify.org?format=json', { credentials: 'omit' })
       .then((r) => r.json()).then((d) => { evidencia.ip = d.ip; }))
     .catch(() => { evidencia.ip = ''; });
-  // Ubicación exacta (GPS): se pide una sola vez, cuando la persona empieza a llenar el formulario.
+  // Ubicación exacta (GPS): es obligatoria para firmar. Se pide con el botón "Activar mi ubicación"
+  // (si ya estaba permitida, se toma sola al abrir la página) y se puede reintentar si falla.
   let promesaGps = null;
+  function mostrarUbicacion(estado, texto) {
+    $('caja-ubicacion').classList.toggle('ok', estado === 'ok');
+    $('caja-ubicacion').classList.toggle('mal', estado === 'mal');
+    $('estado-ubicacion').textContent = texto;
+    $('activar-ubicacion').classList.toggle('oculto', estado === 'ok');
+    $('activar-ubicacion').disabled = estado === 'pidiendo';
+    $('activar-ubicacion').textContent = estado === 'mal' ? 'Intentar de nuevo' : 'Activar mi ubicación';
+    $('ayuda-ubicacion').classList.toggle('oculto', estado !== 'mal');
+    if (estado === 'mal') $('ayuda-ubicacion').open = true;
+  }
   function pedirUbicacion() {
+    if (evidencia.gps) return Promise.resolve();
     if (promesaGps) return promesaGps;
+    mostrarUbicacion('pidiendo', 'Esperando el permiso de ubicación… acepta el aviso de tu navegador.');
     promesaGps = new Promise((listo) => {
-      if (!navigator.geolocation) { evidencia.gpsEstado = 'Navegador sin GPS'; return listo(); }
+      if (!navigator.geolocation) {
+        evidencia.gpsEstado = 'Navegador sin GPS';
+        mostrarUbicacion('mal', 'Este navegador no permite compartir la ubicación. Abre esta página en Chrome o Safari.');
+        promesaGps = null; actualizar(); return listo();
+      }
       navigator.geolocation.getCurrentPosition(
         (p) => {
           evidencia.gps = { lat: p.coords.latitude, lng: p.coords.longitude, precision: p.coords.accuracy, hora: new Date(p.timestamp).toISOString() };
           evidencia.gpsEstado = 'Autorizó';
-          listo();
+          mostrarUbicacion('ok', '✓ Ubicación activada (precisión ± ' + Math.round(p.coords.accuracy) + ' m).');
+          actualizar(); listo();
         },
-        (e) => { evidencia.gpsEstado = e.code === 1 ? 'No autorizó' : 'No disponible'; listo(); },
-        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+        (e) => {
+          evidencia.gpsEstado = e.code === 1 ? 'No autorizó' : 'No disponible';
+          mostrarUbicacion('mal', e.code === 1
+            ? 'No diste permiso de ubicación. Sin ella no podemos hacer efectiva tu firma.'
+            : 'No pudimos obtener tu ubicación. Revisa que la ubicación de tu dispositivo esté encendida.');
+          promesaGps = null; actualizar(); listo();
+        },
+        { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
     });
     return promesaGps;
   }
-  $('formulario').addEventListener('focusin', pedirUbicacion, { once: true });
+  $('activar-ubicacion').addEventListener('click', pedirUbicacion);
+  // Si la persona ya había permitido la ubicación en esta página, se toma sin volver a preguntar.
+  if (navigator.permissions && navigator.permissions.query) {
+    navigator.permissions.query({ name: 'geolocation' }).then((p) => { if (p.state === 'granted') pedirUbicacion(); }).catch(() => {});
+  }
 
   /* ---------------- Campos ---------------- */
   function llenarTipos(tipos) {
@@ -637,6 +710,7 @@
     if (!ciudadElegida()) f.push('ciudad');
     if ($('esMenor').checked && (!v('repNombre') || !v('repNumeroDocumento') || !v('repParentesco'))) f.push('datos del representante');
     if (!(modo === 'dibujar' ? firmaDibujada : firmaSubida)) f.push('firma');
+    if (!evidencia.gps) f.push('activar tu ubicación (arriba)');
     if (!leida) f.push('leer el documento hasta el final');
     if (!$('acepta').checked) f.push('aceptar');
     return f;
