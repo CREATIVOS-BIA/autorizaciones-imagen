@@ -53,6 +53,16 @@
   canvas { display: block; width: 100%; height: 180px; }
   .lienzo .guia { position: absolute; left: 16px; right: 16px; bottom: 36px; border-bottom: 1px solid var(--linea); pointer-events: none; }
   .acciones-firma { display: flex; justify-content: space-between; font-size: 13px; color: var(--suave); margin-top: 6px; }
+  .modos { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+  .modo { flex: 1; min-width: 150px; padding: 10px 12px; border: 1px solid var(--linea); border-radius: 8px; background: #fff; color: var(--tinta); font: 600 14px/1.2 Geist, Arial, sans-serif; cursor: pointer; }
+  .modo.activo { background: var(--tinta); border-color: var(--tinta); color: #fff; }
+  .subir { display: block; margin: 0; padding: 22px 16px; border: 1px dashed #9aa0ad; border-radius: 8px; background: #fff; text-align: center; cursor: pointer; }
+  .subir:hover, .subir:focus-within { border-color: var(--tinta); }
+  .subir-titulo { display: block; font-weight: 700; font-size: 15px; }
+  .subir-ayuda { display: block; font-weight: 400; font-size: 13px; color: var(--suave); margin-top: 4px; }
+  .visualmente-oculto { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+  .vista { margin-top: 10px; padding: 16px; border: 1px solid var(--linea); border-radius: 8px; background: #fff; text-align: center; }
+  .vista img { max-width: 100%; max-height: 160px; }
   button.link { background: none; border: 0; color: var(--tinta); text-decoration: underline; font: inherit; cursor: pointer; padding: 0; }
   button.principal { width: 100%; margin-top: 24px; padding: 14px; border: 0; border-radius: 10px; background: var(--tinta); color: #fff; font: 600 16px/1 Geist, Arial, sans-serif; cursor: pointer; }
   button.principal:disabled { opacity: .45; cursor: default; }
@@ -79,9 +89,6 @@
       <form id="formulario" novalidate>
         <fieldset>
           <legend>Tus datos</legend>
-          <label for="proyecto">Proyecto o pieza</label>
-          <input type="text" id="proyecto" required>
-
           <label for="nombre">Nombre completo</label>
           <input type="text" id="nombre" autocomplete="name" required>
 
@@ -130,8 +137,25 @@
         </fieldset>
 
         <label>Firma</label>
-        <div class="lienzo"><canvas id="lienzo" aria-label="Espacio para firmar"></canvas><div class="guia"></div></div>
-        <div class="acciones-firma"><span>Firma con el dedo o el mouse.</span><button type="button" class="link" id="borrar">Borrar firma</button></div>
+        <div class="modos" role="tablist" aria-label="Cómo quieres firmar">
+          <button type="button" class="modo activo" role="tab" aria-selected="true" id="modo-dibujar">Dibujar aquí</button>
+          <button type="button" class="modo" role="tab" aria-selected="false" id="modo-subir">Subir imagen de mi firma</button>
+        </div>
+
+        <div id="panel-dibujar">
+          <div class="lienzo"><canvas id="lienzo" aria-label="Espacio para firmar"></canvas><div class="guia"></div></div>
+          <div class="acciones-firma"><span>Firma con el dedo o el mouse.</span><button type="button" class="link" id="borrar">Borrar firma</button></div>
+        </div>
+
+        <div id="panel-subir" class="oculto">
+          <label class="subir" for="archivo-firma">
+            <span class="subir-titulo">Elegir imagen de mi firma</span>
+            <span class="subir-ayuda">PNG o JPG desde tu computador o celular. Puede ser una foto de tu firma en papel blanco: el fondo se quita solo.</span>
+          </label>
+          <input type="file" id="archivo-firma" accept="image/png,image/jpeg,image/webp,image/*" class="visualmente-oculto">
+          <div class="vista oculto" id="vista-firma"><img id="img-firma" alt="Vista previa de tu firma"></div>
+          <div class="acciones-firma oculto" id="acciones-subida"><span>Así quedará en el documento.</span><button type="button" class="link" id="quitar-imagen">Cambiar imagen</button></div>
+        </div>
 
         <label class="check"><input type="checkbox" id="acepta"> Leí la carta completa y acepto sus términos. Entiendo que esta firma electrónica tiene la misma validez que mi firma a mano.</label>
 
@@ -154,8 +178,11 @@
   const TIPOS_DOCUMENTO = ['Cédula de ciudadanía', 'Cédula de extranjería', 'Pasaporte', 'Tarjeta de identidad', 'PPT'];
   const $ = (id) => document.getElementById(id);
 
+  // El proyecto ya no se pide en el formulario; si el link trae ?proyecto=..., se guarda para ordenar el registro.
+  const PROYECTO = (new URLSearchParams(location.search).get('proyecto') || '').trim();
+  let modo = 'dibujar', firmaSubida = null;
+
   // Campos
-  $('proyecto').value = new URLSearchParams(location.search).get('proyecto') || '';
   function llenarTipos(tipos) {
     ['tipoDocumento', 'repTipoDocumento'].forEach((id) => {
       $(id).innerHTML = '';
@@ -216,21 +243,99 @@
   lienzo.addEventListener('pointermove', (e) => { if (!dibujando) return; ctx.lineTo(...punto(e)); ctx.stroke(); });
   lienzo.addEventListener('pointerup', () => { if (dibujando) { dibujando = false; trazos++; actualizarBoton(); } });
   $('borrar').addEventListener('click', ajustarLienzo);
-  window.addEventListener('resize', () => { if (!trazos) ajustarLienzo(); });
+  window.addEventListener('resize', () => { if (!trazos && modo === 'dibujar') ajustarLienzo(); });
   ajustarLienzo();
 
-  function actualizarBoton() { $('enviar').disabled = !(leida && trazos > 0 && $('acepta').checked); }
+  // Dos formas de firmar: dibujar en pantalla o subir una imagen de la firma que la persona ya tiene.
+  function cambiarModo(nuevo) {
+    modo = nuevo;
+    $('modo-dibujar').classList.toggle('activo', modo === 'dibujar');
+    $('modo-subir').classList.toggle('activo', modo === 'subir');
+    $('modo-dibujar').setAttribute('aria-selected', modo === 'dibujar');
+    $('modo-subir').setAttribute('aria-selected', modo === 'subir');
+    $('panel-dibujar').classList.toggle('oculto', modo !== 'dibujar');
+    $('panel-subir').classList.toggle('oculto', modo !== 'subir');
+    if (modo === 'dibujar' && !trazos) ajustarLienzo();
+    actualizarBoton();
+  }
+  $('modo-dibujar').addEventListener('click', () => cambiarModo('dibujar'));
+  $('modo-subir').addEventListener('click', () => cambiarModo('subir'));
 
-  /** Recorta el espacio en blanco alrededor de la firma para que quede bien en el PDF. */
-  function firmaRecortada() {
-    const w = lienzo.width, h = lienzo.height, px = ctx.getImageData(0, 0, w, h).data;
-    let x0 = w, y0 = h, x1 = 0, y1 = 0;
-    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-      if (px[(y * w + x) * 4 + 3] > 0) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  function quitarImagen() {
+    firmaSubida = null;
+    $('archivo-firma').value = '';
+    $('vista-firma').classList.add('oculto');
+    $('acciones-subida').classList.add('oculto');
+    $('archivo-firma').click();
+    actualizarBoton();
+  }
+  $('quitar-imagen').addEventListener('click', quitarImagen);
+
+  $('archivo-firma').addEventListener('change', (e) => {
+    const archivo = e.target.files && e.target.files[0];
+    $('error').textContent = '';
+    if (!archivo) return;
+    if (!/^image\//.test(archivo.type)) { $('error').textContent = 'El archivo debe ser una imagen (PNG o JPG).'; return; }
+    const url = URL.createObjectURL(archivo);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      firmaSubida = prepararFirmaSubida(img);
+      if (!firmaSubida) {
+        $('error').textContent = 'No encontramos la firma en esa imagen. Prueba con una foto más clara sobre fondo blanco.';
+      } else {
+        $('img-firma').src = firmaSubida;
+        $('vista-firma').classList.remove('oculto');
+        $('acciones-subida').classList.remove('oculto');
+      }
+      actualizarBoton();
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      $('error').textContent = 'No se pudo leer la imagen. Usa un archivo PNG o JPG.';
+    };
+    img.src = url;
+  });
+
+  /** Lleva la imagen a un tamaño razonable, vuelve transparente el fondo claro (papel o pantalla) y recorta. */
+  function prepararFirmaSubida(img) {
+    for (const maximo of [1200, 900, 600]) {
+      const escala = Math.min(1, maximo / img.naturalWidth, (maximo / 2) / img.naturalHeight);
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(img.naturalWidth * escala));
+      c.height = Math.max(1, Math.round(img.naturalHeight * escala));
+      const g = c.getContext('2d');
+      g.drawImage(img, 0, 0, c.width, c.height);
+      const datos = g.getImageData(0, 0, c.width, c.height), px = datos.data;
+      for (let i = 0; i < px.length; i += 4) {
+        const luz = 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
+        if (luz > 190) px[i + 3] = 0;
+        else if (luz > 150) px[i + 3] = Math.min(px[i + 3], Math.round(255 * (190 - luz) / 40));
+      }
+      g.putImageData(datos, 0, 0);
+      const png = recortar(c);
+      if (!png) return null;
+      if (png.length < 650000) return png;
     }
+    return null;
+  }
+
+  function actualizarBoton() {
+    const hayFirma = modo === 'dibujar' ? trazos > 0 : !!firmaSubida;
+    $('enviar').disabled = !(leida && hayFirma && $('acepta').checked);
+  }
+
+  /** Recorta el espacio transparente alrededor de la firma para que quede bien en el PDF. Devuelve null si está vacía. */
+  function recortar(origen) {
+    const w = origen.width, h = origen.height, px = origen.getContext('2d').getImageData(0, 0, w, h).data;
+    let x0 = w, y0 = h, x1 = -1, y1 = -1;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      if (px[(y * w + x) * 4 + 3] > 20) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    }
+    if (x1 < 0) return null;
     const m = 8, c = document.createElement('canvas');
-    c.width = Math.max(1, x1 - x0 + 2 * m); c.height = Math.max(1, y1 - y0 + 2 * m);
-    c.getContext('2d').drawImage(lienzo, x0 - m, y0 - m, c.width, c.height, 0, 0, c.width, c.height);
+    c.width = x1 - x0 + 1 + 2 * m; c.height = y1 - y0 + 1 + 2 * m;
+    c.getContext('2d').drawImage(origen, x0 - m, y0 - m, c.width, c.height, 0, 0, c.width, c.height);
     return c.toDataURL('image/png');
   }
 
@@ -241,10 +346,12 @@
     $('enviar').textContent = 'Firmando…';
     const v = (id) => $(id).value;
     const datos = {
-      proyecto: v('proyecto'), nombre: v('nombre'), tipoDocumento: v('tipoDocumento'), numeroDocumento: v('numeroDocumento'),
+      proyecto: PROYECTO, nombre: v('nombre'), tipoDocumento: v('tipoDocumento'), numeroDocumento: v('numeroDocumento'),
       correo: v('correo'), telefono: v('telefono'), ciudad: v('ciudad'), acepta: $('acepta').checked,
       esMenor: $('esMenor').checked, repNombre: v('repNombre'), repTipoDocumento: v('repTipoDocumento'),
-      repNumeroDocumento: v('repNumeroDocumento'), repParentesco: v('repParentesco'), firmaPng: firmaRecortada(),
+      repNumeroDocumento: v('repNumeroDocumento'), repParentesco: v('repParentesco'),
+      firmaPng: modo === 'dibujar' ? recortar(lienzo) : firmaSubida,
+      origenFirma: modo === 'dibujar' ? 'dibujo' : 'imagen',
     };
     // text/plain evita la verificación previa de CORS, que Apps Script no responde.
     fetch(API, { method: 'POST', credentials: 'omit', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(datos) })
