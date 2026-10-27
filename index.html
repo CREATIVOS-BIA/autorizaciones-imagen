@@ -71,6 +71,14 @@
   .ios-alerta-botones span { flex: 1; padding: 11px; color: #007aff; }
   .ios-alerta-botones span + span { border-left: 1px solid #c6c6c8; font-weight: 600; }
   .ios-alerta-botones .marcada { background: #e9f2ff; }
+  .solo-chrome { position: fixed; inset: 0; z-index: 60; background: #fff; display: flex; align-items: center; justify-content: center; padding: 24px 20px; overflow-y: auto; }
+  .solo-chrome.oculto { display: none; }
+  .solo-chrome-caja { width: 100%; max-width: 420px; text-align: center; }
+  .solo-chrome-logo { width: 64px; height: 64px; border-radius: 14px; }
+  .solo-chrome-caja h2 { font-size: 21px; margin: 14px 0 8px; }
+  .solo-chrome-caja p { color: var(--suave); margin: 0 0 6px; }
+  .boton-enlace { display: block; box-sizing: border-box; text-align: center; text-decoration: none; padding: 13px; border-radius: 10px; font: 600 15px/1.2 Geist, Arial, sans-serif; }
+  .boton-enlace.borde { border: 1px solid var(--linea); background: #fff; color: var(--tinta); }
   .ver-guia { flex-basis: 100%; text-align: left; font-size: 13px; }
   .boton-nativo { padding: 10px 14px; border-radius: 8px; background: #0a0a0a; color: #ffffff; font: 600 14px/1.2 Geist, Arial, sans-serif; }
   button.secundario:disabled { opacity: .5; cursor: default; }
@@ -277,6 +285,20 @@
   </main>
 </div>
 
+<div class="solo-chrome oculto" id="solo-chrome" role="dialog" aria-modal="true" aria-labelledby="solo-chrome-titulo">
+  <div class="solo-chrome-caja">
+    <img src="img/apple-touch-icon.png" alt="" class="solo-chrome-logo">
+    <h2 id="solo-chrome-titulo">Abre esta página en Google Chrome</h2>
+    <p id="solo-chrome-texto">Para firmar desde iPhone necesitamos que uses Google Chrome. Te estamos llevando a Chrome…</p>
+    <div class="guia-botones">
+      <button type="button" class="principal-chico" id="sc-abrir">Abrir en Chrome</button>
+      <a class="boton-enlace borde" id="sc-descargar" href="https://apps.apple.com/app/google-chrome/id535886823" target="_blank" rel="noopener">No tengo Chrome: descargarlo gratis</a>
+      <button type="button" class="borde" id="sc-copiar">Copiar el link para pegarlo en Chrome</button>
+    </div>
+    <p class="guia-copiado" id="sc-copiado" role="status"></p>
+  </div>
+</div>
+
 <div class="guia oculto" id="guia-ubicacion" role="dialog" aria-modal="true" aria-labelledby="guia-titulo">
   <div class="guia-caja">
     <h3 id="guia-titulo">Activa tu ubicación</h3>
@@ -448,7 +470,36 @@
     }, 2500);
   }
 
+  // iPhone: la firma solo se hace desde Google Chrome. En Safari (o dentro de WhatsApp, Instagram…) se bloquea
+  // la página y se abre Chrome solo con su enlace propio (googlechromes://); si no lo tiene, se ofrece descargarlo.
+  const SOLO_CHROME_IPHONE = NAV.ios && NAV.navegador !== 'chrome';
+  function urlChrome() {
+    return 'googlechromes://' + location.host + location.pathname + location.search + location.hash;
+  }
+  function abrirEnChrome() {
+    $('solo-chrome-texto').textContent = 'Abriendo Google Chrome… si aparece un aviso, toca «Abrir».';
+    location.href = urlChrome();
+    setTimeout(() => {
+      if (document.visibilityState === 'visible') {
+        $('solo-chrome-texto').textContent = 'Si Chrome no se abrió, es posible que no lo tengas instalado. Descárgalo gratis y vuelve a abrir este link.';
+      }
+    }, 2000);
+  }
+  function exigirChrome() {
+    evidencia.gpsEstado = 'Abierto en ' + (NAV.app || NAV.navegador) + ' (iPhone): se pidió abrir en Chrome';
+    $('solo-chrome').classList.remove('oculto');
+    document.body.style.overflow = 'hidden';
+    abrirEnChrome();
+  }
+  $('sc-abrir').addEventListener('click', abrirEnChrome);
+  $('sc-copiar').addEventListener('click', () => {
+    const listo = () => { $('sc-copiado').textContent = 'Link copiado. Ábrelo pegándolo en Chrome.'; };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(location.href).then(listo, () => window.prompt('Copia este link:', location.href));
+    else window.prompt('Copia este link:', location.href);
+  });
+
   function pedirUbicacion(origen) {
+    if (SOLO_CHROME_IPHONE) { exigirChrome(); return Promise.resolve(); }
     if (evidencia.gps) return Promise.resolve();
     if (promesaGps) return promesaGps;
     intentosGps++;
@@ -489,6 +540,7 @@
   // Al abrir la página: se pide la ubicación de una vez (sale el aviso del navegador sin tocar nada).
   // Si la persona la activa en ajustes con la página abierta, también se toma sola.
   function pedirAlAbrir() {
+    if (SOLO_CHROME_IPHONE) { exigirChrome(); return; }
     if (NAV.app) { salirDeLaApp(); return; }
     // En iPhone Safari a veces reporta mal el permiso: siempre se pide directamente.
     if (NAV.ios) { pedirUbicacion('auto'); return; }
@@ -1009,6 +1061,7 @@
     if (!ciudadElegida()) f.push('ciudad');
     if ($('esMenor').checked && (!v('repNombre') || !v('repNumeroDocumento') || !v('repParentesco'))) f.push('datos del representante');
     if (!(modo === 'dibujar' ? firmaDibujada : firmaSubida)) f.push('firma');
+    if (SOLO_CHROME_IPHONE) f.push('abrir esta página en Google Chrome');
     if (!evidencia.gps && !ubicacionAlterna) f.push('activar tu ubicación (arriba)');
     if (!leida) f.push('leer el documento hasta el final');
     if (!$('acepta').checked) f.push('aceptar');
