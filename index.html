@@ -79,6 +79,7 @@
   .solo-chrome-caja p { color: var(--suave); margin: 0 0 6px; }
   .boton-enlace { display: block; box-sizing: border-box; text-align: center; text-decoration: none; padding: 13px; border-radius: 10px; font: 600 15px/1.2 Geist, Arial, sans-serif; }
   .boton-enlace.borde { border: 1px solid var(--linea); background: #fff; color: var(--tinta); }
+  .nota-menores { font-size: 13px; color: var(--suave); margin: 14px 0 0; }
   .ver-guia { flex-basis: 100%; text-align: left; font-size: 13px; }
   .boton-nativo { padding: 10px 14px; border-radius: 8px; background: #0a0a0a; color: #ffffff; font: 600 14px/1.2 Geist, Arial, sans-serif; }
   button.secundario:disabled { opacity: .5; cursor: default; }
@@ -172,7 +173,7 @@
       <section class="tutorial" aria-labelledby="titulo-tutorial">
         <h3 id="titulo-tutorial">Antes de firmar</h3>
         <ol class="pasos">
-          <li><b>Activa tu ubicación.</b> Para hacer efectiva tu firma necesitamos que aceptes el uso de la ubicación de tu dispositivo.</li>
+          <li><b>Activa tu ubicación</b> (recomendado). Le da más respaldo a tu firma. Si no puedes, igual puedes firmar y quedará tu ubicación aproximada.</li>
           <li><b>Llena tus datos.</b> El documento de abajo se va completando mientras escribes.</li>
           <li><b>Firma</b> dibujando con el dedo o el mouse, o subiendo una imagen de tu firma.</li>
           <li><b>Lee el documento completo y acepta</b> al final.</li>
@@ -187,10 +188,10 @@
         <p class="legal"><b>Aviso de validez de la firma electrónica y tratamiento de datos.</b>
           Al firmar por este medio aceptas que tu firma electrónica tiene la misma validez y efectos jurídicos que tu firma manuscrita,
           conforme a la Ley 527 de 1999 y el Decreto 2364 de 2012. Para garantizar la autenticidad e integridad de la firma,
-          Bia Services S.A.S. registrará la fecha y hora, la dirección IP, la ubicación geográfica de tu dispositivo, el tipo de
+          BIA TECHNOLOGIES S.A.S. (NIT 901.637.465-4) registrará la fecha y hora, la dirección IP, la ubicación geográfica de tu dispositivo, el tipo de
           dispositivo y navegador, y una huella digital del documento firmado. Estos datos se usarán únicamente como evidencia de la
           firma y se tratarán conforme a la Ley 1581 de 2012 y la política de tratamiento de datos personales de Bia. Como titular,
-          puedes conocer, actualizar, rectificar y suprimir tus datos a través de los canales de atención de Bia.</p>
+          puedes conocer, actualizar, rectificar y suprimir tus datos escribiendo a <a href="mailto:legales@bia.app">legales@bia.app</a>.</p>
       </section>
 
       <form id="formulario" novalidate>
@@ -227,23 +228,7 @@
           <ul class="lista-ciudades oculto" id="lista-ciudades" role="listbox" aria-label="Ciudades"></ul>
         </div>
 
-        <label class="check"><input type="checkbox" id="esMenor"> La persona que aparece en el material es menor de edad (firma su representante legal).</label>
-        <div class="menor oculto" id="bloque-menor">
-          <label for="repNombre">Nombre del representante legal</label>
-          <input type="text" id="repNombre">
-          <div class="fila">
-            <div>
-              <label for="repTipoDocumento">Tipo de documento</label>
-              <select id="repTipoDocumento"></select>
-            </div>
-            <div>
-              <label for="repNumeroDocumento">Número de documento</label>
-              <input type="text" id="repNumeroDocumento" inputmode="numeric">
-            </div>
-          </div>
-          <label for="repParentesco">Parentesco con el menor</label>
-          <input type="text" id="repParentesco" placeholder="Madre, padre, tutor…">
-        </div>
+        <p class="nota-menores">Este formato es solo para personas mayores de edad. Si quien aparece en el material es menor de edad, escribe a <a href="mailto:legales@bia.app">legales@bia.app</a>.</p>
 
         <h3>Tu firma</h3>
         <div class="modos" role="tablist" aria-label="Cómo quieres firmar">
@@ -257,9 +242,9 @@
         <div id="panel-subir" class="oculto">
           <label class="subir" for="archivo-firma">
             <span class="subir-titulo">Elegir imagen de mi firma</span>
-            <span class="subir-ayuda">PNG o JPG desde tu computador o celular. Puede ser una foto de tu firma en papel blanco: el fondo se quita solo.</span>
+            <span class="subir-ayuda">PNG, JPG, PDF u otro formato de imagen, desde tu computador o celular. Puede ser una foto de tu firma en papel blanco: el fondo se quita solo.</span>
           </label>
-          <input type="file" id="archivo-firma" accept="image/png,image/jpeg,image/webp,image/*" class="visualmente-oculto">
+          <input type="file" id="archivo-firma" accept="image/*,application/pdf" class="visualmente-oculto">
           <div class="vista oculto" id="vista-firma"><img id="img-firma" alt="Vista previa de tu firma"></div>
           <div class="acciones-firma oculto" id="acciones-subida"><span>Así quedará en el documento.</span><button type="button" class="link" id="quitar-imagen">Cambiar imagen</button></div>
         </div>
@@ -269,7 +254,7 @@
         <div class="documento" id="documento"><p class="estado">Cargando el documento…</p></div>
         <div id="fin-documento" aria-hidden="true"></div>
 
-        <label class="check"><input type="checkbox" id="acepta"> Leí el documento completo y acepto sus términos. Entiendo que esta firma electrónica tiene la misma validez que mi firma a mano y autorizo el registro de los datos de la firma (fecha, IP, ubicación y dispositivo).</label>
+        <label class="check"><input type="checkbox" id="acepta"> Leí el documento completo, declaro que soy mayor de edad y acepto sus términos y el tratamiento de mis datos personales, incluida mi imagen. Entiendo que esta firma electrónica tiene la misma validez que mi firma a mano y autorizo el registro de los datos de la firma (fecha, IP, ubicación y dispositivo).</label>
 
         <button type="submit" class="principal" id="enviar" disabled>Firmar</button>
         <p class="pendientes" id="pendientes"></p>
@@ -436,12 +421,12 @@
       return;
     }
     if (botonNativo) {
-      mostrarUbicacion('mal', 'Toca el botón de ubicación para permitirla. Sin ella no podemos hacer efectiva tu firma.');
+      mostrarUbicacion('mal', 'Toca el botón de ubicación para permitirla. Si no puedes, igual puedes firmar con tu ubicación aproximada.');
       return;
     }
     if (NAV.ios) {
       if (!YA_RECARGO && !silencioso) {
-        mostrarUbicacion('mal', 'No se dio permiso de ubicación. Toca «Activar mi ubicación» para que vuelva a aparecer el aviso.');
+        mostrarUbicacion('mal', 'No se dio permiso de ubicación. Toca «Activar mi ubicación» para que vuelva a aparecer el aviso, o firma con tu ubicación aproximada.');
         return;
       }
       mostrarUbicacion('mal', 'Tu iPhone tiene bloqueada la ubicación para esta página.');
@@ -691,7 +676,7 @@
 
   /* ---------------- Campos ---------------- */
   function llenarTipos(tipos) {
-    ['tipoDocumento', 'repTipoDocumento'].forEach((id) => {
+    ['tipoDocumento'].forEach((id) => {
       $(id).innerHTML = '';
       tipos.forEach((t) => $(id).add(new Option(t, t)));
     });
@@ -831,7 +816,6 @@
     return inputCiudad.value.replace(/\s+/g, ' ').trim();
   }
 
-  $('esMenor').addEventListener('change', () => { $('bloque-menor').classList.toggle('oculto', !$('esMenor').checked); actualizar(); });
   $('formulario').addEventListener('input', actualizar);
   $('acepta').addEventListener('change', actualizar);
 
@@ -858,10 +842,7 @@
       FECHA_FIRMA: fechaHoy(),
       CORREO: v('correo').toLowerCase(),
       TELEFONO: v('telefono'),
-      REPRESENTANTE: $('esMenor').checked
-        ? 'Firma como representante legal del menor: ' + (nombrePropio(v('repNombre')) || '________') + ', ' + v('repTipoDocumento') +
-          ' No. ' + (v('repNumeroDocumento') || '________') + ' (' + (v('repParentesco') || '________') + ').'
-        : '',
+      REPRESENTANTE: '',
     };
   }
   const VACIO = { NOMBRE_COMPLETO: 'tu nombre completo', TIPO_DOCUMENTO: 'tipo de documento', NUMERO_DOCUMENTO: 'número',
@@ -995,7 +976,11 @@
     const archivo = e.target.files && e.target.files[0];
     $('error').textContent = '';
     if (!archivo) return;
-    if (!/^image\//.test(archivo.type)) { $('error').textContent = 'El archivo debe ser una imagen (PNG o JPG).'; return; }
+    const esPdf = archivo.type === 'application/pdf' || /\.pdf$/i.test(archivo.name);
+    if (esPdf) { leerFirmaPdf(archivo); return; }
+    if (!/^image\//.test(archivo.type) && !/\.(png|jpe?g|webp|gif|bmp|heic|heif)$/i.test(archivo.name)) {
+      $('error').textContent = 'El archivo debe ser una imagen (PNG, JPG…) o un PDF.'; return;
+    }
     const url = URL.createObjectURL(archivo);
     const img = new Image();
     img.onload = () => {
@@ -1010,17 +995,63 @@
       }
       actualizar();
     };
-    img.onerror = () => { URL.revokeObjectURL(url); $('error').textContent = 'No se pudo leer la imagen. Usa un archivo PNG o JPG.'; };
+    img.onerror = () => { URL.revokeObjectURL(url); $('error').textContent = 'No se pudo leer la imagen. Usa un archivo PNG, JPG o PDF.'; };
     img.src = url;
   });
+
+  function mostrarFirmaSubida(png) {
+    firmaSubida = png;
+    if (!firmaSubida) {
+      $('error').textContent = 'No encontramos la firma en ese archivo. Prueba con una imagen más clara sobre fondo blanco.';
+    } else {
+      $('img-firma').src = firmaSubida;
+      $('vista-firma').classList.remove('oculto');
+      $('acciones-subida').classList.remove('oculto');
+    }
+    actualizar();
+  }
+  // PDF: se dibuja la primera página con PDF.js (se carga solo cuando hace falta) y se trata como una imagen.
+  const PDFJS = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
+  let promesaPdfJs = null;
+  function cargarPdfJs() {
+    if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+    if (!promesaPdfJs) {
+      promesaPdfJs = new Promise((ok, mal) => {
+        const s = document.createElement('script');
+        s.src = PDFJS + 'pdf.min.js';
+        s.onload = () => { window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS + 'pdf.worker.min.js'; ok(window.pdfjsLib); };
+        s.onerror = () => { promesaPdfJs = null; mal(new Error('pdf.js')); };
+        document.head.appendChild(s);
+      });
+    }
+    return promesaPdfJs;
+  }
+  function leerFirmaPdf(archivo) {
+    $('error').textContent = '';
+    $('pendientes').textContent = 'Leyendo el PDF…';
+    archivo.arrayBuffer()
+      .then((datos) => cargarPdfJs().then((pdfjs) => pdfjs.getDocument({ data: datos }).promise))
+      .then((pdf) => pdf.getPage(1))
+      .then((pagina) => {
+        const vista = pagina.getViewport({ scale: 2 });
+        const c = document.createElement('canvas');
+        c.width = Math.round(vista.width); c.height = Math.round(vista.height);
+        const g = c.getContext('2d');
+        g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height);
+        return pagina.render({ canvasContext: g, viewport: vista }).promise.then(() => c);
+      })
+      .then((c) => mostrarFirmaSubida(prepararFirmaSubida(c)))
+      .catch(() => { $('error').textContent = 'No se pudo leer el PDF. Prueba con una imagen (PNG o JPG) de tu firma.'; actualizar(); });
+  }
 
   /** Lleva la imagen a un tamaño razonable, vuelve transparente el fondo claro (papel o pantalla) y recorta. */
   function prepararFirmaSubida(img) {
     for (const maximo of [1200, 900, 600]) {
-      const escala = Math.min(1, maximo / img.naturalWidth, (maximo / 2) / img.naturalHeight);
+      const ancho = img.naturalWidth || img.width, alto = img.naturalHeight || img.height;
+      const escala = Math.min(1, maximo / ancho, (maximo / 2) / alto);
       const c = document.createElement('canvas');
-      c.width = Math.max(1, Math.round(img.naturalWidth * escala));
-      c.height = Math.max(1, Math.round(img.naturalHeight * escala));
+      c.width = Math.max(1, Math.round(ancho * escala));
+      c.height = Math.max(1, Math.round(alto * escala));
       const g = c.getContext('2d');
       g.drawImage(img, 0, 0, c.width, c.height);
       const datos = g.getImageData(0, 0, c.width, c.height), px = datos.data;
@@ -1059,10 +1090,8 @@
     if (v('numeroDocumento').length < 4) f.push('número de documento');
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v('correo'))) f.push('correo');
     if (!ciudadElegida()) f.push('ciudad');
-    if ($('esMenor').checked && (!v('repNombre') || !v('repNumeroDocumento') || !v('repParentesco'))) f.push('datos del representante');
     if (!(modo === 'dibujar' ? firmaDibujada : firmaSubida)) f.push('firma');
     if (SOLO_CHROME_IPHONE) f.push('abrir esta página en Google Chrome');
-    if (!evidencia.gps && !ubicacionAlterna) f.push('activar tu ubicación (arriba)');
     if (!leida) f.push('leer el documento hasta el final');
     if (!$('acepta').checked) f.push('aceptar');
     return f;
@@ -1086,8 +1115,7 @@
     const datos = {
       proyecto: PROYECTO, nombre: v('nombre'), tipoDocumento: v('tipoDocumento'), numeroDocumento: v('numeroDocumento'),
       correo: v('correo'), telefono: v('telefono'), ciudad: ciudadElegida(), acepta: $('acepta').checked,
-      esMenor: $('esMenor').checked, repNombre: v('repNombre'), repTipoDocumento: v('repTipoDocumento'),
-      repNumeroDocumento: v('repNumeroDocumento'), repParentesco: v('repParentesco'),
+      esMenor: false,
       firmaPng: modo === 'dibujar' ? firmaDibujada : firmaSubida,
       origenFirma: modo === 'dibujar' ? 'dibujo' : 'imagen',
       evidencia: evidencia,
