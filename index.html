@@ -55,6 +55,7 @@
   .lista-ciudades .opcion.activa, .lista-ciudades .opcion:hover { background: var(--relleno); }
   .lista-ciudades .opcion b { font-weight: 700; }
   .lista-ciudades .otra { color: var(--suave); font-style: italic; }
+  .lista-ciudades .depto { margin-left: 8px; font-size: 12px; color: var(--suave); }
 
   .modos { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
   .modo { flex: 1; min-width: 150px; padding: 10px 12px; border: 1px solid var(--linea); border-radius: 8px; background: #fff; color: var(--tinta); font: 600 14px/1.2 Geist, Arial, sans-serif; cursor: pointer; }
@@ -201,24 +202,11 @@
   </main>
 </div>
 
+<script src="municipios.js"></script>
 <script>
   // Apps Script "Autorizaciones de Imagen - Bia" (versión publicada para cualquier persona).
   const API = 'https://script.google.com/macros/s/AKfycbwBpL7Vohu2_kb5dFitWJOOvSAKm2OAJZGzsJglsbIFABwYUTsUI5iNHZ7qE7JBj-r3lw/exec';
   const TIPOS_DOCUMENTO = ['Cédula de ciudadanía', 'Cédula de extranjería', 'Pasaporte', 'Tarjeta de identidad', 'PPT'];
-  const CIUDADES_PRINCIPALES = ['Bogotá','Medellín', 'Cali', 'Barranquilla', 'Cartagena', 'Bucaramanga', 'Cúcuta',
-    'Pereira', 'Santa Marta', 'Ibagué', 'Manizales', 'Villavicencio', 'Pasto', 'Montería', 'Neiva', 'Armenia',
-    'Valledupar', 'Sincelejo', 'Popayán', 'Tunja'];
-  const OTRAS_CIUDADES = ['Acacías', 'Aguachica', 'Apartadó', 'Arauca', 'Barrancabermeja', 'Bello', 'Buenaventura',
-    'Buga', 'Cajicá', 'Calarcá', 'Caldas', 'Candelaria', 'Cartago', 'Caucasia', 'Cereté', 'Chía', 'Chinchiná',
-    'Chiquinquirá', 'Ciénaga', 'Copacabana', 'Cota', 'Duitama', 'Dosquebradas', 'El Carmen de Bolívar', 'Envigado',
-    'Espinal', 'Facatativá', 'Florencia', 'Floridablanca', 'Funza', 'Fusagasugá', 'Galapa', 'Garzón', 'Girardot',
-    'Girón', 'Granada', 'Inírida', 'Ipiales', 'Itagüí', 'Jamundí', 'La Ceja', 'La Dorada',
-    'La Estrella', 'Leticia', 'Lorica', 'Los Patios', 'Madrid', 'Magangué', 'Maicao', 'Malambo', 'Marinilla',
-    'Mitú', 'Mocoa', 'Mosquera', 'Ocaña', 'Palmira', 'Pamplona', 'Piedecuesta', 'Pitalito', 'Planeta Rica',
-    'Puerto Asís', 'Puerto Boyacá', 'Puerto Carreño', 'Puerto Colombia', 'Quibdó', 'Riohacha', 'Rionegro',
-    'Sabanalarga', 'Sabaneta', 'Sahagún', 'San Andrés', 'San Gil', 'San José del Guaviare', 'Santa Rosa de Cabal',
-    'Santander de Quilichao', 'Soacha', 'Sogamoso', 'Soledad', 'Tierralta', 'Tuluá', 'Tumaco', 'Turbaco', 'Turbo',
-    'Uribia', 'Villa del Rosario', 'Yopal', 'Yumbo', 'Zipaquirá'];
   const $ = (id) => document.getElementById(id);
 
   // El proyecto no se pide en el formulario; si el link trae ?proyecto=..., se guarda para ordenar el registro.
@@ -287,34 +275,50 @@
   llenarTipos(TIPOS_DOCUMENTO);
 
   /* ---------------- Ciudad: escribir y filtrar ---------------- */
-  // Mientras la persona escribe, la lista se filtra (sin importar tildes ni mayúsculas) y el campo se
-  // autocompleta con la primera coincidencia ("Bog" → "Bogotá D.C."). Si su ciudad no está, puede dejarla escrita.
-  const OTRAS_ORDENADAS = OTRAS_CIUDADES.slice().sort((a, b) => a.localeCompare(b, 'es'));
-  const TODAS_CIUDADES = CIUDADES_PRINCIPALES.concat(OTRAS_ORDENADAS);
+  // Todos los municipios de Colombia (MUNICIPIOS, en municipios.js, lista DIVIPOLA del DANE). Arriba van las 20
+  // ciudades principales con su nombre de uso común; debajo, todos los demás de la A a la Z con su departamento.
+  // Mientras la persona escribe, la lista se filtra (sin importar tildes ni mayúsculas) y el campo se autocompleta
+  // con la primera coincidencia ("Bog" → "Bogotá"). Si su ciudad no está, puede dejarla escrita.
+  const PRINCIPALES = [['11001', 'Bogotá'], ['05001', 'Medellín'], ['76001', 'Cali'], ['08001', 'Barranquilla'],
+    ['13001', 'Cartagena'], ['68001', 'Bucaramanga'], ['54001', 'Cúcuta'], ['66001', 'Pereira'], ['47001', 'Santa Marta'],
+    ['73001', 'Ibagué'], ['17001', 'Manizales'], ['50001', 'Villavicencio'], ['52001', 'Pasto'], ['23001', 'Montería'],
+    ['41001', 'Neiva'], ['63001', 'Armenia'], ['20001', 'Valledupar'], ['70001', 'Sincelejo'], ['19001', 'Popayán'],
+    ['15001', 'Tunja']];
   const normal = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const porCodigo = new Map(MUNICIPIOS.map((m) => [m[0], m]));
+  const CIUDADES_TOP = PRINCIPALES.map(([cod, nombre]) => {
+    const m = porCodigo.get(cod) || [cod, nombre, ''];
+    // El nombre oficial también sirve para buscar: "San José de Cúcuta", "Cartagena de Indias"…
+    return { nombre, depto: m[2], valor: nombre, buscar: normal(nombre + ' ' + m[1]), principal: true };
+  });
+  const codigosTop = new Set(PRINCIPALES.map((p) => p[0]));
+  const CIUDADES_RESTO = MUNICIPIOS.filter((m) => !codigosTop.has(m[0]))
+    .map(([, nombre, depto]) => ({ nombre, depto, valor: nombre + ', ' + depto, buscar: normal(nombre) }));
+  const TODAS = CIUDADES_TOP.concat(CIUDADES_RESTO);
+  const MAX_RESULTADOS = 80;
   const inputCiudad = $('ciudad'), listaCiudades = $('lista-ciudades');
   let opcionesCiudad = [], activa = -1;
 
   function buscarCiudades(texto) {
     const q = normal(texto);
-    if (!q) return [{ grupo: 'Ciudades principales' }, ...CIUDADES_PRINCIPALES.map((c) => ({ c })),
-      { grupo: 'Otras ciudades (A–Z)' }, ...OTRAS_ORDENADAS.map((c) => ({ c }))];
-    const empiezan = [], contienen = [];
-    TODAS_CIUDADES.forEach((c) => {
-      const n = normal(c);
-      if (n.startsWith(q) || n.split(' ').some((p) => p.startsWith(q))) empiezan.push({ c });
-      else if (n.includes(q)) contienen.push({ c });
-    });
-    const res = empiezan.concat(contienen);
-    if (!res.some((o) => normal(o.c) === q)) res.push({ c: texto.trim(), otra: true });
+    if (!q) return [{ grupo: 'Ciudades principales' }, ...CIUDADES_TOP,
+      { grupo: 'Todos los municipios (A–Z)' }, ...CIUDADES_RESTO];
+    const inicio = [], palabra = [], contiene = [];
+    for (const c of TODAS) {
+      if (c.buscar.startsWith(q) || normal(c.valor).startsWith(q)) inicio.push(c);
+      else if (c.buscar.split(' ').some((p) => p.startsWith(q))) palabra.push(c);
+      else if (c.buscar.includes(q)) contiene.push(c);
+    }
+    const res = inicio.concat(palabra, contiene).slice(0, MAX_RESULTADOS);
+    if (!TODAS.some((c) => normal(c.valor) === q)) res.push({ valor: texto.trim(), otra: true });
     return res;
   }
   function resaltar(nombre, texto) {
     const q = normal(texto);
     const span = document.createElement('span');
-    const i = q ? normal(nombre).indexOf(q) : -1;
-    // normal() conserva la longitud de cada letra de la ciudad salvo signos; se resalta solo si coincide limpio.
-    if (i < 0 || normal(nombre).length !== nombre.length) { span.textContent = nombre; return span; }
+    const n = normal(nombre), i = q ? n.indexOf(q) : -1;
+    // Solo se resalta cuando el nombre no tiene signos que cambien posiciones al normalizar.
+    if (i < 0 || n.length !== nombre.length) { span.textContent = nombre; return span; }
     span.append(nombre.slice(0, i));
     const b = document.createElement('b'); b.textContent = nombre.slice(i, i + q.length); span.append(b);
     span.append(nombre.slice(i + q.length));
@@ -322,69 +326,80 @@
   }
   function pintarLista(texto) {
     const res = buscarCiudades(texto);
-    listaCiudades.innerHTML = '';
+    const frag = document.createDocumentFragment();
     opcionesCiudad = [];
     res.forEach((o) => {
       const li = document.createElement('li');
-      if (o.grupo) { li.className = 'grupo'; li.textContent = o.grupo; li.setAttribute('role', 'presentation'); listaCiudades.appendChild(li); return; }
+      if (o.grupo) { li.className = 'grupo'; li.textContent = o.grupo; li.setAttribute('role', 'presentation'); frag.appendChild(li); return; }
       li.className = 'opcion' + (o.otra ? ' otra' : '');
       li.setAttribute('role', 'option');
       li.id = 'ciudad-op-' + opcionesCiudad.length;
-      if (o.otra) li.textContent = 'Usar «' + o.c + '» (mi ciudad no está en la lista)';
-      else li.appendChild(resaltar(o.c, texto));
-      li.addEventListener('mousedown', (e) => { e.preventDefault(); elegirCiudad(o.c); });
-      opcionesCiudad.push({ li, c: o.c, otra: !!o.otra });
-      listaCiudades.appendChild(li);
+      if (o.otra) li.textContent = 'Usar «' + o.valor + '» (mi ciudad no está en la lista)';
+      else {
+        li.appendChild(resaltar(o.nombre, texto));
+        if (o.depto && o.depto !== o.nombre) { const d = document.createElement('span'); d.className = 'depto'; d.textContent = o.depto; li.appendChild(d); }
+      }
+      li.addEventListener('mousedown', (e) => { e.preventDefault(); elegirCiudad(o.valor); });
+      opcionesCiudad.push({ li, valor: o.valor, otra: !!o.otra });
+      frag.appendChild(li);
     });
+    listaCiudades.innerHTML = '';
+    listaCiudades.appendChild(frag);
+    listaCiudades.scrollTop = 0;
     marcarActiva(texto && opcionesCiudad.length && !opcionesCiudad[0].otra ? 0 : -1);
     abrirLista(true);
   }
   function marcarActiva(i) {
+    if (activa >= 0 && opcionesCiudad[activa]) opcionesCiudad[activa].li.classList.remove('activa');
     activa = i;
-    opcionesCiudad.forEach((o, j) => o.li.classList.toggle('activa', j === i));
-    if (i >= 0) { opcionesCiudad[i].li.scrollIntoView({ block: 'nearest' }); inputCiudad.setAttribute('aria-activedescendant', opcionesCiudad[i].li.id); }
-    else inputCiudad.removeAttribute('aria-activedescendant');
+    if (i >= 0) {
+      opcionesCiudad[i].li.classList.add('activa');
+      opcionesCiudad[i].li.scrollIntoView({ block: 'nearest' });
+      inputCiudad.setAttribute('aria-activedescendant', opcionesCiudad[i].li.id);
+    } else inputCiudad.removeAttribute('aria-activedescendant');
   }
   function abrirLista(abierta) {
     listaCiudades.classList.toggle('oculto', !abierta);
     inputCiudad.setAttribute('aria-expanded', abierta);
   }
-  function elegirCiudad(c) {
-    inputCiudad.value = c;
+  function elegirCiudad(valor) {
+    inputCiudad.value = valor;
     abrirLista(false);
     actualizar();
   }
 
   // Al entrar al campo (o tocarlo con la lista cerrada) se selecciona lo escrito y se muestra la lista completa:
   // así se puede escribir otra ciudad encima sin borrar.
-  function abrirParaCambiar() { pintarLista(''); inputCiudad.select(); }
+  function abrirParaCambiar() { activa = -1; pintarLista(''); inputCiudad.select(); }
   inputCiudad.addEventListener('focus', abrirParaCambiar);
   inputCiudad.addEventListener('click', () => { if (listaCiudades.classList.contains('oculto')) abrirParaCambiar(); });
   inputCiudad.addEventListener('input', (e) => {
     const texto = inputCiudad.value;
+    activa = -1;
     pintarLista(texto);
     // Autocompletar: si escribe (no si borra) y la primera opción empieza igual, se completa y se deja seleccionado el resto.
     const escribiendo = !e.inputType || e.inputType.startsWith('insert');
     const primera = opcionesCiudad[0];
-    if (escribiendo && primera && !primera.otra && normal(texto) && normal(primera.c).startsWith(normal(texto))
-        && inputCiudad.selectionStart === texto.length && primera.c.length > texto.length) {
-      inputCiudad.value = primera.c;
-      inputCiudad.setSelectionRange(texto.length, primera.c.length);
+    if (escribiendo && primera && !primera.otra && normal(texto) && normal(primera.valor).startsWith(normal(texto))
+        && inputCiudad.selectionStart === texto.length && primera.valor.length > texto.length) {
+      inputCiudad.value = primera.valor;
+      inputCiudad.setSelectionRange(texto.length, primera.valor.length);
     }
   });
   inputCiudad.addEventListener('keydown', (e) => {
     const abierta = !listaCiudades.classList.contains('oculto');
     if (e.key === 'ArrowDown') { e.preventDefault(); if (!abierta) pintarLista(inputCiudad.value); marcarActiva(Math.min(activa + 1, opcionesCiudad.length - 1)); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); marcarActiva(Math.max(activa - 1, 0)); }
-    else if (e.key === 'Enter') { if (abierta) { e.preventDefault(); if (activa >= 0) elegirCiudad(opcionesCiudad[activa].c); else abrirLista(false); } }
-    else if (e.key === 'Tab') { if (abierta && activa >= 0) elegirCiudad(opcionesCiudad[activa].c); }
+    else if (e.key === 'Enter') { if (abierta) { e.preventDefault(); if (activa >= 0) elegirCiudad(opcionesCiudad[activa].valor); else abrirLista(false); } }
+    else if (e.key === 'Tab') { if (abierta && activa >= 0) elegirCiudad(opcionesCiudad[activa].valor); }
     else if (e.key === 'Escape') { abrirLista(false); }
   });
   inputCiudad.addEventListener('blur', () => {
     abrirLista(false);
-    // Si lo escrito coincide con una ciudad de la lista, se deja con su nombre exacto (con tildes).
-    const igual = TODAS_CIUDADES.find((c) => normal(c) === normal(inputCiudad.value));
-    if (igual) inputCiudad.value = igual;
+    // Si lo escrito coincide con un municipio (y no hay dos con ese nombre), se deja con su nombre exacto.
+    const q = normal(inputCiudad.value);
+    const iguales = TODAS.filter((c) => normal(c.valor) === q || c.buscar === q);
+    if (iguales.length === 1) inputCiudad.value = iguales[0].valor;
     actualizar();
   });
 
