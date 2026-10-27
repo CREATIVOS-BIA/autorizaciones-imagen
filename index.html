@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Autorización de uso de imagen — Bia</title>
+<link rel="icon" href="img/rayo_esquina.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!--
+  Página de firma de autorizaciones de imagen de Bia.
+  El texto de la carta, la generación del PDF, Drive, el registro y Slack viven en el Apps Script
+  "Autorizaciones de Imagen - Bia" (Drive: AUV/25. Autorizaciones de Imagen/04_Registro/Automatizacion).
+  Esta página solo muestra la carta y envía la firma; no usa las cuentas de Google de quien firma.
+-->
+<style>
+  :root { --tinta: #0a0a0a; --suave: #5b6170; --linea: #dcdfe4; --fondo: #e9ebee; --error: #b42318; --ok: #067647; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fondo); color: var(--tinta); font: 15px/1.55 Geist, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
+
+  /* La hoja membreteada: hoja carta blanca con marca de agua, rayo en la esquina y pie con logo. */
+  .hoja { position: relative; max-width: 816px; margin: 24px auto; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.08), 0 8px 24px rgba(0,0,0,.06); padding: 112px 64px 150px; overflow: hidden; }
+  .hoja .marca { position: absolute; left: 0; top: 150px; width: 38%; max-width: 310px; pointer-events: none; user-select: none; z-index: 0; }
+  .hoja .esquina { position: absolute; top: 56px; right: 64px; width: 22px; pointer-events: none; z-index: 0; }
+  .hoja .pie { position: absolute; left: 64px; bottom: 40px; width: 300px; max-width: calc(100% - 128px); pointer-events: none; z-index: 0; }
+  .contenido { position: relative; z-index: 1; }
+  @media (max-width: 600px) {
+    .hoja { margin: 0; box-shadow: none; padding: 84px 20px 120px; }
+    .hoja .esquina { top: 32px; right: 20px; width: 18px; }
+    .hoja .pie { left: 20px; bottom: 32px; width: 230px; }
+  }
+
+  h1 { font-size: 20px; font-weight: 700; margin: 0 0 4px; letter-spacing: -.01em; }
+  .sub { color: var(--suave); margin: 0 0 20px; }
+  .carta { border: 1px solid var(--linea); border-radius: 10px; padding: 20px; max-height: 55vh; overflow-y: auto; font-size: 14px; text-align: justify; background: rgba(255,255,255,.85); }
+  .carta h2 { font-size: 14px; font-weight: 700; text-align: center; margin: 0 0 12px; }
+  .carta p { margin: 0 0 10px; }
+  .carta .estado { text-align: center; color: var(--suave); }
+  .aviso-lectura { font-size: 13px; color: var(--suave); margin: 8px 0 28px; }
+  fieldset { border: 0; padding: 0; margin: 0 0 8px; }
+  legend { font-weight: 700; font-size: 16px; margin-bottom: 4px; }
+  label { display: block; font-size: 13px; font-weight: 600; margin: 14px 0 6px; }
+  input[type=text], input[type=email], input[type=tel], select { width: 100%; padding: 12px; border: 1px solid var(--linea); border-radius: 8px; font: inherit; background: #fff; color: var(--tinta); }
+  input:focus, select:focus { outline: 2px solid var(--tinta); outline-offset: 1px; }
+  .fila { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 520px) { .fila { grid-template-columns: 1fr; } }
+  .check { display: flex; gap: 10px; align-items: flex-start; font-weight: 400; font-size: 14px; margin-top: 16px; }
+  .check input { margin-top: 3px; width: 18px; height: 18px; flex: none; accent-color: var(--tinta); }
+  .menor { border-left: 3px solid var(--linea); padding-left: 12px; margin-top: 8px; }
+  .lienzo { position: relative; border: 1px dashed #9aa0ad; border-radius: 8px; background: #fff; touch-action: none; }
+  canvas { display: block; width: 100%; height: 180px; }
+  .lienzo .guia { position: absolute; left: 16px; right: 16px; bottom: 36px; border-bottom: 1px solid var(--linea); pointer-events: none; }
+  .acciones-firma { display: flex; justify-content: space-between; font-size: 13px; color: var(--suave); margin-top: 6px; }
+  button.link { background: none; border: 0; color: var(--tinta); text-decoration: underline; font: inherit; cursor: pointer; padding: 0; }
+  button.principal { width: 100%; margin-top: 24px; padding: 14px; border: 0; border-radius: 10px; background: var(--tinta); color: #fff; font: 600 16px/1 Geist, Arial, sans-serif; cursor: pointer; }
+  button.principal:disabled { opacity: .45; cursor: default; }
+  .error { color: var(--error); font-size: 14px; margin-top: 12px; min-height: 1em; }
+  .listo { text-align: center; padding: 40px 0; }
+  .listo h2 { color: var(--ok); margin-top: 0; }
+  .oculto { display: none; }
+</style>
+</head>
+<body>
+<div class="hoja">
+  <img class="marca" src="img/rayo_marca_de_agua.png" alt="">
+  <img class="esquina" src="img/rayo_esquina.png" alt="">
+  <img class="pie" src="img/pie_logo.png" alt="Bia. Al fin, tecnología en energía.">
+
+  <main class="contenido">
+    <div id="paso-firma">
+      <h1>Autorización de uso de imagen</h1>
+      <p class="sub">Lee la carta completa, llena tus datos y firma al final.</p>
+
+      <div class="carta" id="carta" tabindex="0" aria-label="Texto de la carta"><p class="estado">Cargando la carta…</p></div>
+      <p class="aviso-lectura" id="aviso-lectura">Baja hasta el final de la carta para poder firmar.</p>
+
+      <form id="formulario" novalidate>
+        <fieldset>
+          <legend>Tus datos</legend>
+          <label for="proyecto">Proyecto o pieza</label>
+          <input type="text" id="proyecto" required>
+
+          <label for="nombre">Nombre completo</label>
+          <input type="text" id="nombre" autocomplete="name" required>
+
+          <div class="fila">
+            <div>
+              <label for="tipoDocumento">Tipo de documento</label>
+              <select id="tipoDocumento" required></select>
+            </div>
+            <div>
+              <label for="numeroDocumento">Número de documento</label>
+              <input type="text" id="numeroDocumento" inputmode="numeric" required>
+            </div>
+          </div>
+
+          <div class="fila">
+            <div>
+              <label for="correo">Correo</label>
+              <input type="email" id="correo" autocomplete="email" required>
+            </div>
+            <div>
+              <label for="telefono">Teléfono (opcional)</label>
+              <input type="tel" id="telefono" autocomplete="tel">
+            </div>
+          </div>
+
+          <label for="ciudad">Ciudad donde firmas</label>
+          <input type="text" id="ciudad" autocomplete="address-level2" required>
+
+          <label class="check"><input type="checkbox" id="esMenor"> La persona que aparece en el material es menor de edad (firma su representante legal).</label>
+          <div class="menor oculto" id="bloque-menor">
+            <label for="repNombre">Nombre del representante legal</label>
+            <input type="text" id="repNombre">
+            <div class="fila">
+              <div>
+                <label for="repTipoDocumento">Tipo de documento</label>
+                <select id="repTipoDocumento"></select>
+              </div>
+              <div>
+                <label for="repNumeroDocumento">Número de documento</label>
+                <input type="text" id="repNumeroDocumento" inputmode="numeric">
+              </div>
+            </div>
+            <label for="repParentesco">Parentesco con el menor</label>
+            <input type="text" id="repParentesco" placeholder="Madre, padre, tutor…">
+          </div>
+        </fieldset>
+
+        <label>Firma</label>
+        <div class="lienzo"><canvas id="lienzo" aria-label="Espacio para firmar"></canvas><div class="guia"></div></div>
+        <div class="acciones-firma"><span>Firma con el dedo o el mouse.</span><button type="button" class="link" id="borrar">Borrar firma</button></div>
+
+        <label class="check"><input type="checkbox" id="acepta"> Leí la carta completa y acepto sus términos. Entiendo que esta firma electrónica tiene la misma validez que mi firma a mano.</label>
+
+        <button type="submit" class="principal" id="enviar" disabled>Firmar</button>
+        <p class="error" id="error" role="alert"></p>
+      </form>
+    </div>
+
+    <div class="listo oculto" id="paso-listo">
+      <h2>¡Listo, quedó firmada!</h2>
+      <p>Gracias. Tu autorización quedó guardada.</p>
+      <p class="sub" id="id-firma"></p>
+    </div>
+  </main>
+</div>
+
+<script>
+  // Apps Script "Autorizaciones de Imagen - Bia" (versión publicada para cualquier persona).
+  const API = 'https://script.google.com/macros/s/AKfycbwBpL7Vohu2_kb5dFitWJOOvSAKm2OAJZGzsJglsbIFABwYUTsUI5iNHZ7qE7JBj-r3lw/exec';
+  const TIPOS_DOCUMENTO = ['Cédula de ciudadanía', 'Cédula de extranjería', 'Pasaporte', 'Tarjeta de identidad', 'PPT'];
+  const $ = (id) => document.getElementById(id);
+
+  // Campos
+  $('proyecto').value = new URLSearchParams(location.search).get('proyecto') || '';
+  function llenarTipos(tipos) {
+    ['tipoDocumento', 'repTipoDocumento'].forEach((id) => {
+      $(id).innerHTML = '';
+      tipos.forEach((t) => $(id).add(new Option(t, t)));
+    });
+  }
+  llenarTipos(TIPOS_DOCUMENTO);
+  $('esMenor').addEventListener('change', () => $('bloque-menor').classList.toggle('oculto', !$('esMenor').checked));
+  $('acepta').addEventListener('change', actualizarBoton);
+
+  // Carta: se trae del Apps Script sin credenciales, así no importa qué cuentas de Google tenga abiertas quien firma.
+  const carta = $('carta');
+  let leida = false, cartaLista = false;
+  function revisarLectura() {
+    if (cartaLista && carta.scrollTop + carta.clientHeight >= carta.scrollHeight - 24) {
+      leida = true;
+      $('aviso-lectura').textContent = 'Leíste la carta completa.';
+      actualizarBoton();
+    }
+  }
+  carta.addEventListener('scroll', revisarLectura);
+  function cargarCarta() {
+    carta.innerHTML = '<p class="estado">Cargando la carta…</p>';
+    fetch(API + '?api=datos', { credentials: 'omit' })
+      .then((r) => r.json())
+      .then((d) => {
+        if (!d.ok) throw new Error(d.error || 'Sin datos');
+        if (d.tiposDocumento) llenarTipos(d.tiposDocumento);
+        carta.innerHTML = '';
+        d.parrafos.forEach((p) => {
+          const el = document.createElement(p.titulo ? 'h2' : 'p');
+          el.textContent = p.texto;
+          carta.appendChild(el);
+        });
+        cartaLista = true;
+        revisarLectura();
+      })
+      .catch(() => {
+        carta.innerHTML = '<p class="estado">No se pudo cargar la carta. <button type="button" class="link" id="reintentar">Intentar de nuevo</button></p>';
+        $('reintentar').addEventListener('click', cargarCarta);
+      });
+  }
+  cargarCarta();
+
+  // Firma
+  const lienzo = $('lienzo');
+  const ctx = lienzo.getContext('2d');
+  let trazos = 0, dibujando = false;
+  function ajustarLienzo() {
+    const r = lienzo.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    lienzo.width = r.width * dpr; lienzo.height = r.height * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.lineWidth = 2.2; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#0a0a0a';
+    trazos = 0; actualizarBoton();
+  }
+  function punto(e) { const r = lienzo.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
+  lienzo.addEventListener('pointerdown', (e) => { dibujando = true; lienzo.setPointerCapture(e.pointerId); ctx.beginPath(); ctx.moveTo(...punto(e)); });
+  lienzo.addEventListener('pointermove', (e) => { if (!dibujando) return; ctx.lineTo(...punto(e)); ctx.stroke(); });
+  lienzo.addEventListener('pointerup', () => { if (dibujando) { dibujando = false; trazos++; actualizarBoton(); } });
+  $('borrar').addEventListener('click', ajustarLienzo);
+  window.addEventListener('resize', () => { if (!trazos) ajustarLienzo(); });
+  ajustarLienzo();
+
+  function actualizarBoton() { $('enviar').disabled = !(leida && trazos > 0 && $('acepta').checked); }
+
+  /** Recorta el espacio en blanco alrededor de la firma para que quede bien en el PDF. */
+  function firmaRecortada() {
+    const w = lienzo.width, h = lienzo.height, px = ctx.getImageData(0, 0, w, h).data;
+    let x0 = w, y0 = h, x1 = 0, y1 = 0;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      if (px[(y * w + x) * 4 + 3] > 0) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    }
+    const m = 8, c = document.createElement('canvas');
+    c.width = Math.max(1, x1 - x0 + 2 * m); c.height = Math.max(1, y1 - y0 + 2 * m);
+    c.getContext('2d').drawImage(lienzo, x0 - m, y0 - m, c.width, c.height, 0, 0, c.width, c.height);
+    return c.toDataURL('image/png');
+  }
+
+  $('formulario').addEventListener('submit', (e) => {
+    e.preventDefault();
+    $('error').textContent = '';
+    $('enviar').disabled = true;
+    $('enviar').textContent = 'Firmando…';
+    const v = (id) => $(id).value;
+    const datos = {
+      proyecto: v('proyecto'), nombre: v('nombre'), tipoDocumento: v('tipoDocumento'), numeroDocumento: v('numeroDocumento'),
+      correo: v('correo'), telefono: v('telefono'), ciudad: v('ciudad'), acepta: $('acepta').checked,
+      esMenor: $('esMenor').checked, repNombre: v('repNombre'), repTipoDocumento: v('repTipoDocumento'),
+      repNumeroDocumento: v('repNumeroDocumento'), repParentesco: v('repParentesco'), firmaPng: firmaRecortada(),
+    };
+    // text/plain evita la verificación previa de CORS, que Apps Script no responde.
+    fetch(API, { method: 'POST', credentials: 'omit', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(datos) })
+      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(r.error || 'No se pudo firmar.');
+        $('paso-firma').classList.add('oculto');
+        $('paso-listo').classList.remove('oculto');
+        $('id-firma').textContent = 'ID de firma: ' + r.id;
+        window.scrollTo(0, 0);
+      })
+      .catch((err) => {
+        $('error').textContent = (err && err.message && err.message !== 'Failed to fetch')
+          ? err.message.replace(/^Error: /, '')
+          : 'No se pudo enviar la firma. Revisa tu conexión e inténtalo de nuevo.';
+        $('enviar').textContent = 'Firmar';
+        actualizarBoton();
+      });
+  });
+</script>
+</body>
+</html>
