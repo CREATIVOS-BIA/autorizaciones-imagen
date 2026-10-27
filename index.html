@@ -79,6 +79,16 @@
   .solo-chrome-caja p { color: var(--suave); margin: 0 0 6px; }
   .boton-enlace { display: block; box-sizing: border-box; text-align: center; text-decoration: none; padding: 13px; border-radius: 10px; font: 600 15px/1.2 Geist, Arial, sans-serif; }
   .boton-enlace.borde { border: 1px solid var(--linea); background: #fff; color: var(--tinta); }
+  .selector { margin: 8px 0 20px; }
+  .selector h3 { margin-top: 0; }
+  .opciones { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 560px) { .opciones { grid-template-columns: 1fr; } }
+  .opcion { text-align: left; padding: 16px; border: 1px solid var(--linea); border-radius: 10px; background: #fff; color: var(--tinta); font: 15px/1.35 Geist, Arial, sans-serif; cursor: pointer; }
+  .opcion b { display: block; font-size: 17px; margin-bottom: 4px; }
+  .opcion span { color: var(--suave); font-size: 14px; }
+  .opcion:hover, .opcion:focus-visible { border-color: var(--tinta); }
+  .elegido { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 14px; color: var(--suave); margin: 0 0 16px; }
+  .elegido b { color: var(--tinta); }
   .nota-menores { font-size: 13px; color: var(--suave); margin: 14px 0 0; }
   .ver-guia { flex-basis: 100%; text-align: left; font-size: 13px; }
   .boton-nativo { padding: 10px 14px; border-radius: 8px; background: #0a0a0a; color: #ffffff; font: 600 14px/1.2 Geist, Arial, sans-serif; }
@@ -168,8 +178,19 @@
 
   <main class="contenido">
     <div id="paso-firma">
-      <h1>Autorización de uso de imagen</h1>
-      <p class="sub">Llena tus datos y firma. Abajo verás cómo va quedando tu documento.</p>
+      <h1 id="titulo-pagina">Autorización de uso de imagen</h1>
+      <p class="sub" id="sub-pagina">Primero cuéntanos quién firma. Luego llenas los datos y abajo verás cómo va quedando el documento.</p>
+
+      <section class="selector" id="selector" aria-labelledby="titulo-selector">
+        <h3 id="titulo-selector">¿Quién firma esta autorización?</h3>
+        <div class="opciones">
+          <button type="button" class="opcion" data-tipo="persona"><b>Una persona</b><span>Autorizo el uso de mi imagen, mi voz y mi nombre.</span></button>
+          <button type="button" class="opcion" data-tipo="empresa"><b>Una empresa</b><span>Autorizo, en nombre de la empresa, el uso de su marca, logo, instalaciones, productos y uniformes.</span></button>
+        </div>
+      </section>
+      <p class="elegido oculto" id="elegido"><span>Firma: <b id="elegido-texto"></b></span><button type="button" class="link" id="cambiar-tipo">Cambiar</button></p>
+
+      <div id="contenido-firma" class="oculto">
       <section class="tutorial" aria-labelledby="titulo-tutorial">
         <h3 id="titulo-tutorial">Antes de firmar</h3>
         <ol class="pasos">
@@ -195,9 +216,36 @@
       </section>
 
       <form id="formulario" novalidate>
-        <h3>Tus datos</h3>
+        <div id="bloque-empresa" class="oculto">
+          <h3>Datos de la empresa</h3>
+          <label for="razonSocial">Razón social</label>
+          <input type="text" id="razonSocial" autocomplete="organization" placeholder="Como aparece en el certificado de Cámara de Comercio">
+          <div class="fila">
+            <div>
+              <label for="nit">NIT (con dígito de verificación)</label>
+              <input type="text" id="nit" inputmode="numeric" placeholder="900.123.456-7">
+            </div>
+            <div>
+              <label for="ciudadDomicilio">Ciudad de domicilio de la empresa</label>
+              <input type="text" id="ciudadDomicilio" autocomplete="address-level2" placeholder="Por ejemplo, Bogotá">
+            </div>
+          </div>
+          <label for="certificado">Certificado de existencia y representación legal (Cámara de Comercio)</label>
+          <label class="subir" for="certificado">
+            <span class="subir-titulo" id="certificado-titulo">Subir el certificado</span>
+            <span class="subir-ayuda" id="certificado-ayuda">PDF o foto, de máximo 10 MB. Es opcional, pero nos ayuda a confirmar que quien firma puede representar a la empresa.</span>
+          </label>
+          <input type="file" id="certificado" accept="application/pdf,image/*" class="visualmente-oculto">
+          <div class="acciones-firma oculto" id="acciones-certificado"><span id="certificado-nombre"></span><button type="button" class="link" id="quitar-certificado">Quitar</button></div>
+        </div>
+
+        <h3 id="titulo-datos">Tus datos</h3>
         <label for="nombre">Nombre completo</label>
         <input type="text" id="nombre" autocomplete="name" required>
+        <div id="campo-cargo" class="oculto">
+          <label for="cargo">Cargo en la empresa</label>
+          <input type="text" id="cargo" autocomplete="organization-title" placeholder="Por ejemplo, Representante legal o Gerente de mercadeo">
+        </div>
 
         <div class="fila">
           <div>
@@ -228,7 +276,7 @@
           <ul class="lista-ciudades oculto" id="lista-ciudades" role="listbox" aria-label="Ciudades"></ul>
         </div>
 
-        <p class="nota-menores">Este formato es solo para personas mayores de edad. Si quien aparece en el material es menor de edad, escribe a <a href="mailto:legales@bia.app">legales@bia.app</a>.</p>
+        <p class="nota-menores" id="nota-menores">Este formato es solo para personas mayores de edad. Si quien aparece en el material es menor de edad, escribe a <a href="mailto:legales@bia.app">legales@bia.app</a>.</p>
 
         <h3>Tu firma</h3>
         <div class="modos" role="tablist" aria-label="Cómo quieres firmar">
@@ -254,12 +302,13 @@
         <div class="documento" id="documento"><p class="estado">Cargando el documento…</p></div>
         <div id="fin-documento" aria-hidden="true"></div>
 
-        <label class="check"><input type="checkbox" id="acepta"> Leí el documento completo, declaro que soy mayor de edad y acepto sus términos y el tratamiento de mis datos personales, incluida mi imagen. Entiendo que esta firma electrónica tiene la misma validez que mi firma a mano y autorizo el registro de los datos de la firma (fecha, IP, ubicación y dispositivo).</label>
+        <label class="check"><input type="checkbox" id="acepta"> <span id="texto-acepta">Leí el documento completo, declaro que soy mayor de edad y acepto sus términos y el tratamiento de mis datos personales, incluida mi imagen.</span> Entiendo que esta firma electrónica tiene la misma validez que mi firma a mano y autorizo el registro de los datos de la firma (fecha, IP, ubicación y dispositivo).</label>
 
         <button type="submit" class="principal" id="enviar" disabled>Firmar</button>
         <p class="pendientes" id="pendientes"></p>
         <p class="error" id="error" role="alert"></p>
       </form>
+      </div>
     </div>
 
     <div class="listo oculto" id="paso-listo">
@@ -311,6 +360,10 @@
 
   // El proyecto no se pide en el formulario; si el link trae ?proyecto=..., se guarda para ordenar el registro.
   const PROYECTO = (new URLSearchParams(location.search).get('proyecto') || '').trim();
+  // Persona o empresa: se elige al entrar (o llega en el link con ?tipo=persona / ?tipo=empresa).
+  let tipoFirma = null;
+  const CAMPOS_EMPRESA = ['RAZON_SOCIAL', 'NIT', 'CIUDAD_DOMICILIO', 'NOMBRE_REPRESENTANTE', 'CARGO'];
+  let certificado = null;
   let modo = 'dibujar', firmaSubida = null, firmaDibujada = null, trazos = 0, dibujando = false;
   let documentoListo = false, leida = false, enNegrita = ['NOMBRE_COMPLETO', 'TIPO_DOCUMENTO', 'NUMERO_DOCUMENTO', 'CIUDAD_FIRMA', 'CORREO', 'TELEFONO', 'REPRESENTANTE'];
 
@@ -843,11 +896,29 @@
       CORREO: v('correo').toLowerCase(),
       TELEFONO: v('telefono'),
       REPRESENTANTE: '',
+      RAZON_SOCIAL: v('razonSocial'),
+      NIT: v('nit'),
+      CIUDAD_DOMICILIO: nombrePropio(v('ciudadDomicilio')),
+      NOMBRE_REPRESENTANTE: nombrePropio(v('nombre')),
+      CARGO: v('cargo'),
     };
   }
   const VACIO = { NOMBRE_COMPLETO: 'tu nombre completo', TIPO_DOCUMENTO: 'tipo de documento', NUMERO_DOCUMENTO: 'número',
-    CIUDAD_FIRMA: 'ciudad', CORREO: 'tu correo', TELEFONO: 'tu teléfono', PROYECTO: '' };
+    CIUDAD_FIRMA: 'ciudad', CORREO: 'tu correo', TELEFONO: 'tu teléfono', PROYECTO: '',
+    RAZON_SOCIAL: 'nombre de la empresa', NIT: 'NIT', CARGO: 'tu cargo', CIUDAD_DOMICILIO: 'ciudad de domicilio',
+    NOMBRE_REPRESENTANTE: 'tu nombre completo' };
 
+  /** Agrega texto al párrafo poniendo en negrita los fragmentos indicados (por ejemplo "PRIMERA. Objeto."). */
+  function agregarTexto(el, texto, negritas) {
+    const n = negritas.find((b) => b && texto.includes(b));
+    if (!n) { el.appendChild(document.createTextNode(texto)); return; }
+    const i = texto.indexOf(n);
+    agregarTexto(el, texto.slice(0, i), negritas);
+    const b = document.createElement('b');
+    b.textContent = n;
+    el.appendChild(b);
+    agregarTexto(el, texto.slice(i + n.length), negritas);
+  }
   function pintarDocumento(parrafos) {
     const doc = $('documento');
     doc.innerHTML = '';
@@ -868,7 +939,7 @@
       } else {
         p.texto.split(/(\{\{[A-Z_]+\}\})/).forEach((parte) => {
           const m = parte.match(/^\{\{([A-Z_]+)\}\}$/);
-          if (!m) { el.appendChild(document.createTextNode(parte)); return; }
+          if (!m) { agregarTexto(el, parte, p.negritas || []); return; }
           const s = document.createElement('span');
           s.dataset.m = m[1];
           el.appendChild(s);
@@ -910,22 +981,102 @@
     }
   }).observe($('fin-documento'));
 
+  function cartaDelRepositorio(archivo) {
+    return fetch(archivo + '?v=' + Date.now(), { credentials: 'omit' }).then((r) => r.json()).then((bloques) => bloques.map((b, i) => ({
+      texto: b.t, titulo: i === 0, centro: !!b.centro, negrita: !!b.negrita, pequeno: !!b.pequeno, sangria: !!b.sangria,
+      negritas: b.negritas || [],
+    })));
+  }
   function cargarDocumento() {
+    if (!tipoFirma) return;
+    const pedido = tipoFirma;
+    documentoListo = false;
+    leida = false;
     $('documento').innerHTML = '<p class="estado">Cargando el documento…</p>';
-    fetch(API + '?api=datos', { credentials: 'omit' })
+    fetch(API + '?api=datos&tipo=' + pedido, { credentials: 'omit' })
       .then((r) => r.json())
       .then((d) => {
         if (!d.ok) throw new Error(d.error || 'Sin datos');
         if (d.tiposDocumento) llenarTipos(d.tiposDocumento);
-        if (d.enNegrita) enNegrita = d.enNegrita;
-        pintarDocumento(d.parrafos);
+        if (d.enNegrita) enNegrita = d.enNegrita.concat(CAMPOS_EMPRESA);
+        // Un servidor que todavía no conoce las empresas responde con la carta de persona.
+        if (pedido === 'empresa' && d.tipo !== 'empresa') return cartaDelRepositorio('carta-empresa.json');
+        return d.parrafos;
       })
+      .then((parrafos) => { if (pedido === tipoFirma) pintarDocumento(parrafos); })
       .catch(() => {
         $('documento').innerHTML = '<p class="estado">No se pudo cargar el documento. <button type="button" class="link" id="reintentar">Intentar de nuevo</button></p>';
         $('reintentar').addEventListener('click', cargarDocumento);
       });
   }
-  cargarDocumento();
+  /* ---------------- Persona o empresa ---------------- */
+  const TEXTOS_TIPO = {
+    persona: {
+      titulo: 'Autorización de uso de imagen', elegido: 'una persona', datos: 'Tus datos',
+      acepta: 'Leí el documento completo, declaro que soy mayor de edad y acepto sus términos y el tratamiento de mis datos personales, incluida mi imagen.',
+    },
+    empresa: {
+      titulo: 'Autorización de uso de marca', elegido: 'una empresa', datos: 'Datos de quien firma por la empresa',
+      acepta: 'Leí el documento completo, declaro que tengo facultades para representar a la Empresa y autorizar el uso de sus Signos, y acepto sus términos y el tratamiento de mis datos personales.',
+    },
+  };
+  function elegirTipo(tipo, desdeLink) {
+    if (!TEXTOS_TIPO[tipo]) return;
+    tipoFirma = tipo;
+    const tx = TEXTOS_TIPO[tipo], esEmpresa = tipo === 'empresa';
+    $('titulo-pagina').textContent = tx.titulo;
+    document.title = tx.titulo + ' — Bia';
+    $('sub-pagina').textContent = 'Llena los datos y firma. Abajo verás cómo va quedando el documento.';
+    $('elegido-texto').textContent = tx.elegido;
+    $('titulo-datos').textContent = tx.datos;
+    $('texto-acepta').textContent = tx.acepta;
+    $('bloque-empresa').classList.toggle('oculto', !esEmpresa);
+    $('campo-cargo').classList.toggle('oculto', !esEmpresa);
+    $('nota-menores').classList.toggle('oculto', esEmpresa);
+    $('selector').classList.add('oculto');
+    $('elegido').classList.remove('oculto');
+    $('contenido-firma').classList.remove('oculto');
+    $('acepta').checked = false;
+    const q = new URLSearchParams(location.search);
+    q.set('tipo', tipo);
+    history.replaceState(null, '', location.pathname + '?' + q.toString() + location.hash);
+    cargarDocumento();
+    if (!desdeLink) window.scrollTo(0, 0);
+    requestAnimationFrame(ajustarLienzo);
+  }
+  document.querySelectorAll('.opcion').forEach((b) => b.addEventListener('click', () => elegirTipo(b.dataset.tipo)));
+  $('cambiar-tipo').addEventListener('click', () => {
+    tipoFirma = null;
+    $('selector').classList.remove('oculto');
+    $('elegido').classList.add('oculto');
+    $('contenido-firma').classList.add('oculto');
+    $('titulo-pagina').textContent = 'Autorización de uso de imagen';
+    actualizarBoton();
+  });
+  ['razonSocial', 'nit', 'ciudadDomicilio', 'cargo'].forEach((id) => $(id).addEventListener('input', actualizar));
+
+  // Certificado de Cámara de Comercio (opcional): se manda con la firma y queda en la carpeta de la empresa.
+  $('certificado').addEventListener('change', () => {
+    const archivo = $('certificado').files[0];
+    $('certificado').value = '';
+    if (!archivo) return;
+    if (archivo.size > 10 * 1024 * 1024) { $('error').textContent = 'El certificado pesa más de 10 MB. Prueba con un PDF más liviano.'; return; }
+    const lector = new FileReader();
+    lector.onload = () => {
+      certificado = { nombre: archivo.name, tipo: archivo.type || 'application/octet-stream', datos: lector.result };
+      $('certificado-titulo').textContent = 'Certificado cargado';
+      $('certificado-nombre').textContent = archivo.name;
+      $('acciones-certificado').classList.remove('oculto');
+      $('error').textContent = '';
+    };
+    lector.readAsDataURL(archivo);
+  });
+  $('quitar-certificado').addEventListener('click', () => {
+    certificado = null;
+    $('certificado-titulo').textContent = 'Subir el certificado';
+    $('acciones-certificado').classList.add('oculto');
+  });
+  elegirTipo((URL_PARAMS.get('tipo') || '').toLowerCase(), true);
 
   /* ---------------- Firma: dibujar o subir ---------------- */
   const lienzo = $('lienzo');
@@ -1086,7 +1237,14 @@
   function faltantes() {
     const f = [];
     const v = (id) => $(id).value.trim();
+    if (!tipoFirma) return ['elegir si firma una persona o una empresa'];
+    if (tipoFirma === 'empresa') {
+      if (v('razonSocial').length < 3) f.push('razón social');
+      if (v('nit').replace(/\D/g, '').length < 9) f.push('NIT con dígito de verificación');
+      if (v('ciudadDomicilio').length < 3) f.push('ciudad de domicilio');
+    }
     if (v('nombre').split(/\s+/).length < 2) f.push('nombre y apellido');
+    if (tipoFirma === 'empresa' && v('cargo').length < 3) f.push('cargo');
     if (v('numeroDocumento').length < 4) f.push('número de documento');
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v('correo'))) f.push('correo');
     if (!ciudadElegida()) f.push('ciudad');
@@ -1113,6 +1271,8 @@
     evidencia.horaDispositivo = new Date().toString();
     const v = (id) => $(id).value;
     const datos = {
+      tipo: tipoFirma, razonSocial: v('razonSocial'), nit: v('nit'), ciudadDomicilio: v('ciudadDomicilio'), cargo: v('cargo'),
+      certificado: tipoFirma === 'empresa' ? certificado : null,
       proyecto: PROYECTO, nombre: v('nombre'), tipoDocumento: v('tipoDocumento'), numeroDocumento: v('numeroDocumento'),
       correo: v('correo'), telefono: v('telefono'), ciudad: ciudadElegida(), acepta: $('acepta').checked,
       esMenor: false,
