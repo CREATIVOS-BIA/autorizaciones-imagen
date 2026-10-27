@@ -55,6 +55,20 @@
   .ayuda summary { cursor: pointer; font-weight: 600; }
   .ayuda ul { margin: 8px 0 0; padding-left: 18px; }
   .ayuda li { margin-bottom: 4px; }
+  .guia { position: fixed; inset: 0; z-index: 50; background: rgba(10,10,10,.55); display: flex; align-items: flex-end; justify-content: center; padding: 12px; }
+  @media (min-width: 600px) { .guia { align-items: center; } }
+  .guia.oculto { display: none; }
+  .guia-caja { background: #fff; border-radius: 14px; width: 100%; max-width: 520px; max-height: 88vh; overflow-y: auto; padding: 20px 20px 16px; box-shadow: 0 12px 40px rgba(0,0,0,.25); }
+  .guia-caja h3 { margin: 0 0 6px; }
+  .guia-caja p { margin: 0 0 10px; font-size: 14px; }
+  .guia-caja ol { margin: 0; padding-left: 20px; font-size: 14px; }
+  .guia-caja li { margin-bottom: 8px; }
+  .guia-botones { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+  .guia-botones button { width: 100%; padding: 13px; border-radius: 10px; font: 600 15px/1.2 Geist, Arial, sans-serif; cursor: pointer; }
+  .guia-botones .principal-chico { border: 0; background: var(--tinta); color: #fff; }
+  .guia-botones .borde { border: 1px solid var(--linea); background: #fff; color: var(--tinta); }
+  .guia-botones .link { padding: 6px; }
+  .guia-copiado { margin-top: 8px; font-size: 13px; color: var(--ok); text-align: center; }
   .legal { font-size: 11.5px; line-height: 1.5; color: var(--suave); text-align: justify; margin: 14px 0 0; }
   label { display: block; font-size: 13px; font-weight: 600; margin: 14px 0 6px; }
   input[type=text], input[type=email], input[type=tel], select { width: 100%; padding: 12px; border: 1px solid var(--linea); border-radius: 8px; font: inherit; background: #fff; color: var(--tinta); }
@@ -136,14 +150,6 @@
         <div class="ubicacion" id="caja-ubicacion">
           <p class="estado-ubicacion" id="estado-ubicacion" role="status">Tu ubicación todavía no está activada.</p>
           <button type="button" class="secundario" id="activar-ubicacion">Activar mi ubicación</button>
-          <details class="ayuda oculto" id="ayuda-ubicacion">
-            <summary>¿Bloqueaste la ubicación? Así la activas</summary>
-            <ul>
-              <li><b>iPhone (Safari):</b> Ajustes › Privacidad y seguridad › Localización › activa la localización y en Safari elige «Mientras se usa la app». Luego recarga esta página.</li>
-              <li><b>Android (Chrome):</b> toca el candado junto a la dirección de la página › Permisos › Ubicación › Permitir. Revisa también que la ubicación del celular esté encendida.</li>
-              <li><b>Computador:</b> haz clic en el candado junto a la dirección de la página › Ubicación › Permitir, y recarga la página.</li>
-            </ul>
-          </details>
         </div>
 
         <p class="legal"><b>Aviso de validez de la firma electrónica y tratamiento de datos.</b>
@@ -247,6 +253,22 @@
   </main>
 </div>
 
+<div class="guia oculto" id="guia-ubicacion" role="dialog" aria-modal="true" aria-labelledby="guia-titulo">
+  <div class="guia-caja">
+    <h3 id="guia-titulo">Activa tu ubicación</h3>
+    <p id="guia-intro"></p>
+    <ol id="guia-pasos"></ol>
+    <div class="guia-botones">
+      <button type="button" class="principal-chico" id="guia-recargar">Ya la activé, recargar</button>
+      <button type="button" class="principal-chico" id="guia-chrome">Abrir en Chrome</button>
+      <button type="button" class="borde" id="guia-copiar">Copiar link</button>
+      <button type="button" class="borde" id="guia-reintentar">Intentar de nuevo</button>
+      <button type="button" class="link" id="guia-cerrar">Cerrar</button>
+    </div>
+    <p class="guia-copiado" id="guia-copiado" role="status"></p>
+  </div>
+</div>
+
 <script src="municipios.js"></script>
 <script>
   // Apps Script "Autorizaciones de Imagen - Bia" (versión publicada para cualquier persona).
@@ -292,51 +314,177 @@
       .then((r) => r.json()).then((d) => { evidencia.ip = d.ip; }))
     .catch(() => { evidencia.ip = ''; });
   // Ubicación exacta (GPS): es obligatoria para firmar. Se pide con el botón "Activar mi ubicación"
-  // (si ya estaba permitida, se toma sola al abrir la página) y se puede reintentar si falla.
-  let promesaGps = null;
+  // (si ya estaba permitida, se toma sola al abrir la página).
+  // Ojo: cuando alguien toca "No permitir", el navegador NO vuelve a mostrar el aviso aunque la página lo pida;
+  // tampoco lo muestran los navegadores internos de WhatsApp, Instagram o Facebook. En esos casos se abre una
+  // guía con los pasos exactos para su celular y un botón para recargar cuando ya la haya activado.
+  let promesaGps = null, intentosGps = 0, permisoGps = 'desconocido';
+  const NAV = detectarNavegador();
+  function detectarNavegador() {
+    const ua = navigator.userAgent;
+    const app = /WhatsApp/i.test(ua) ? 'WhatsApp' : /Instagram/i.test(ua) ? 'Instagram'
+      : /FBAN|FBAV|FB_IAB|FB4A/i.test(ua) ? 'Facebook' : /Line\//i.test(ua) ? 'LINE'
+      : /TikTok|musical_ly|BytedanceWebview/i.test(ua) ? 'TikTok' : /Snapchat/i.test(ua) ? 'Snapchat'
+      : /LinkedInApp/i.test(ua) ? 'LinkedIn' : /; wv\)/.test(ua) ? 'una aplicación' : '';
+    const ios = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const android = /Android/.test(ua);
+    const navegador = ios ? (/CriOS/.test(ua) ? 'chrome' : /FxiOS/.test(ua) ? 'firefox' : /EdgiOS/.test(ua) ? 'edge' : 'safari')
+      : /SamsungBrowser/.test(ua) ? 'samsung' : /Edg\//.test(ua) ? 'edge' : /Firefox\//.test(ua) ? 'firefox' : 'chrome';
+    return { app, ios, android, navegador, celular: ios || android };
+  }
+
   function mostrarUbicacion(estado, texto) {
     $('caja-ubicacion').classList.toggle('ok', estado === 'ok');
     $('caja-ubicacion').classList.toggle('mal', estado === 'mal');
     $('estado-ubicacion').textContent = texto;
     $('activar-ubicacion').classList.toggle('oculto', estado === 'ok');
     $('activar-ubicacion').disabled = estado === 'pidiendo';
-    $('activar-ubicacion').textContent = estado === 'mal' ? 'Intentar de nuevo' : 'Activar mi ubicación';
-    $('ayuda-ubicacion').classList.toggle('oculto', estado !== 'mal');
-    if (estado === 'mal') $('ayuda-ubicacion').open = true;
+    $('activar-ubicacion').textContent = estado === 'mal' ? 'Ver cómo activarla' : 'Activar mi ubicación';
   }
+
   function pedirUbicacion() {
     if (evidencia.gps) return Promise.resolve();
     if (promesaGps) return promesaGps;
-    mostrarUbicacion('pidiendo', 'Esperando el permiso de ubicación… acepta el aviso de tu navegador.');
+    intentosGps++;
+    if (NAV.app) {
+      evidencia.gpsEstado = 'Abierto dentro de ' + NAV.app;
+      mostrarUbicacion('mal', 'Abriste el link dentro de ' + NAV.app + ', que no deja compartir la ubicación.');
+      abrirGuia('app');
+      return Promise.resolve();
+    }
+    if (!navigator.geolocation) {
+      evidencia.gpsEstado = 'Navegador sin GPS';
+      mostrarUbicacion('mal', 'Este navegador no permite compartir la ubicación.');
+      abrirGuia('sin-gps');
+      return Promise.resolve();
+    }
+    if (permisoGps === 'denied') {
+      // El navegador ya la tiene bloqueada para esta página: no va a volver a preguntar.
+      evidencia.gpsEstado = 'No autorizó';
+      mostrarUbicacion('mal', 'Tu navegador tiene la ubicación bloqueada para esta página.');
+      abrirGuia('bloqueada');
+      return Promise.resolve();
+    }
+    mostrarUbicacion('pidiendo', 'Pidiendo tu ubicación… si aparece un aviso, toca «Permitir».');
     promesaGps = new Promise((listo) => {
-      if (!navigator.geolocation) {
-        evidencia.gpsEstado = 'Navegador sin GPS';
-        mostrarUbicacion('mal', 'Este navegador no permite compartir la ubicación. Abre esta página en Chrome o Safari.');
-        promesaGps = null; actualizar(); return listo();
-      }
-      navigator.geolocation.getCurrentPosition(
-        (p) => {
-          evidencia.gps = { lat: p.coords.latitude, lng: p.coords.longitude, precision: p.coords.accuracy, hora: new Date(p.timestamp).toISOString() };
-          evidencia.gpsEstado = 'Autorizó';
-          mostrarUbicacion('ok', '✓ Ubicación activada (precisión ± ' + Math.round(p.coords.accuracy) + ' m).');
-          actualizar(); listo();
-        },
-        (e) => {
-          evidencia.gpsEstado = e.code === 1 ? 'No autorizó' : 'No disponible';
-          mostrarUbicacion('mal', e.code === 1
-            ? 'No diste permiso de ubicación. Sin ella no podemos hacer efectiva tu firma.'
-            : 'No pudimos obtener tu ubicación. Revisa que la ubicación de tu dispositivo esté encendida.');
-          promesaGps = null; actualizar(); listo();
-        },
-        { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
+      let precisa = true;
+      const exito = (p) => {
+        evidencia.gps = { lat: p.coords.latitude, lng: p.coords.longitude, precision: p.coords.accuracy, hora: new Date(p.timestamp).toISOString() };
+        evidencia.gpsEstado = 'Autorizó';
+        mostrarUbicacion('ok', '✓ Ubicación activada (precisión ± ' + Math.round(p.coords.accuracy) + ' m).');
+        cerrarGuia(); promesaGps = null; actualizar(); listo();
+      };
+      const fallo = (e) => {
+        // Si el GPS tarda (por ejemplo bajo techo), se intenta una vez más con la ubicación aproximada del celular.
+        if (e.code === 3 && precisa) {
+          precisa = false;
+          navigator.geolocation.getCurrentPosition(exito, fallo, { enableHighAccuracy: false, timeout: 15000, maximumAge: 120000 });
+          return;
+        }
+        const bloqueada = e.code === 1;
+        evidencia.gpsEstado = bloqueada ? 'No autorizó' : 'No disponible';
+        mostrarUbicacion('mal', bloqueada
+          ? 'No se dio permiso de ubicación. Sin ella no podemos hacer efectiva tu firma.'
+          : 'No pudimos obtener tu ubicación. Revisa que la ubicación del celular esté encendida.');
+        abrirGuia(bloqueada ? 'bloqueada' : 'apagada');
+        promesaGps = null; actualizar(); listo();
+      };
+      navigator.geolocation.getCurrentPosition(exito, fallo, { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 });
     });
     return promesaGps;
   }
-  $('activar-ubicacion').addEventListener('click', pedirUbicacion);
-  // Si la persona ya había permitido la ubicación en esta página, se toma sin volver a preguntar.
+  $('activar-ubicacion').addEventListener('click', () => {
+    // Desde el segundo intento la guía se abre de inmediato, para que siempre pase algo visible al tocar el botón.
+    if (intentosGps > 0 && permisoGps !== 'prompt') abrirGuia(permisoGps === 'denied' ? 'bloqueada' : 'apagada');
+    pedirUbicacion();
+  });
+  // Si la persona ya había permitido la ubicación, se toma sin volver a preguntar; si la activa en ajustes
+  // mientras la página está abierta, también se toma sola.
   if (navigator.permissions && navigator.permissions.query) {
-    navigator.permissions.query({ name: 'geolocation' }).then((p) => { if (p.state === 'granted') pedirUbicacion(); }).catch(() => {});
+    navigator.permissions.query({ name: 'geolocation' }).then((p) => {
+      permisoGps = p.state;
+      if (p.state === 'granted') pedirUbicacion();
+      p.onchange = () => { permisoGps = p.state; if (p.state === 'granted') pedirUbicacion(); };
+    }).catch(() => {});
   }
+
+  /* Guía para activar la ubicación según el celular */
+  const HOST = location.host || 'esta página';
+  function pasosGuia(motivo) {
+    const n = NAV;
+    if (motivo === 'app') {
+      return {
+        titulo: 'Abre este link en tu navegador',
+        intro: n.app + ' abre los links en su propio navegador, que no deja compartir la ubicación. Ábrelo en ' + (n.ios ? 'Safari' : 'Chrome') + ':',
+        pasos: n.ios
+          ? ['Toca los tres puntos (⋯) o el ícono de compartir, arriba o abajo de la pantalla.', 'Elige «Abrir en Safari» (o «Abrir en el navegador»).', 'Si no aparece esa opción, toca «Copiar link» aquí abajo y pégalo en Safari.']
+          : ['Toca los tres puntos (⋮) arriba a la derecha.', 'Elige «Abrir en Chrome» (o «Abrir en el navegador»).', 'Si no aparece, toca «Abrir en Chrome» o «Copiar link» aquí abajo.'],
+        botones: n.android ? ['chrome', 'copiar'] : ['copiar'],
+      };
+    }
+    if (motivo === 'sin-gps') {
+      return { titulo: 'Usa otro navegador', intro: 'Este navegador no permite compartir la ubicación.', pasos: ['Copia el link y ábrelo en ' + (n.ios ? 'Safari' : 'Chrome') + '.'], botones: ['copiar'] };
+    }
+    const apagada = motivo === 'apagada';
+    let pasos;
+    if (n.ios && n.navegador === 'safari') {
+      pasos = ['Abre <b>Ajustes</b> › <b>Privacidad y seguridad</b> › <b>Localización</b> y actívala.',
+        'En esa misma pantalla baja a <b>Sitios web de Safari</b> y elige <b>Mientras se usa la app</b>. Activa también <b>Ubicación exacta</b>.',
+        'Vuelve a esta página, toca <b>aA</b> en la barra de dirección › <b>Configuración del sitio web</b> › <b>Ubicación</b> › <b>Permitir</b>.',
+        'Toca <b>Ya la activé, recargar</b> aquí abajo.'];
+    } else if (n.ios) {
+      const nombre = { chrome: 'Chrome', firefox: 'Firefox', edge: 'Edge' }[n.navegador] || 'tu navegador';
+      pasos = ['Abre <b>Ajustes</b> › <b>Privacidad y seguridad</b> › <b>Localización</b> y actívala.',
+        'Vuelve a <b>Ajustes</b>, busca <b>' + nombre + '</b> › <b>Ubicación</b> › <b>Mientras se usa la app</b>, y activa <b>Ubicación exacta</b>.',
+        'Toca <b>Ya la activé, recargar</b> aquí abajo.'];
+    } else if (n.android && n.navegador === 'samsung') {
+      pasos = ['Desliza desde arriba de la pantalla y enciende <b>Ubicación</b>.',
+        'En Samsung Internet toca <b>☰</b> › <b>Configuración</b> › <b>Sitios y descargas</b> › <b>Permisos de sitios</b> › <b>Ubicación</b>, busca <b>' + HOST + '</b> y quita el bloqueo.',
+        'Toca <b>Ya la activé, recargar</b> aquí abajo.'];
+    } else if (n.android) {
+      pasos = ['Desliza desde arriba de la pantalla y enciende <b>Ubicación</b>.',
+        'Toca el ícono que está a la izquierda de la dirección de la página (candado o ajustes) › <b>Permisos</b> › <b>Ubicación</b> › <b>Permitir</b>. Si ves <b>Restablecer permisos</b>, tócalo.',
+        'Si no aparece: en Chrome toca <b>⋮</b> › <b>Configuración</b> › <b>Configuración de sitios</b> › <b>Ubicación</b>, busca <b>' + HOST + '</b> en «Bloqueados» y elige <b>Permitir</b>.',
+        'Toca <b>Ya la activé, recargar</b> aquí abajo.'];
+    } else {
+      pasos = ['Haz clic en el ícono a la izquierda de la dirección de la página (candado o ajustes) › <b>Ubicación</b> › <b>Permitir</b>.',
+        'En Mac revisa también <b>Ajustes del Sistema</b> › <b>Privacidad y seguridad</b> › <b>Localización</b>, y actívala para tu navegador.',
+        'Haz clic en <b>Ya la activé, recargar</b> aquí abajo.'];
+    }
+    if (apagada) pasos = ['Revisa que la <b>ubicación de tu ' + (n.celular ? 'celular' : 'equipo') + ' esté encendida</b>' + (n.celular ? ' (desliza desde arriba de la pantalla y toca Ubicación).' : '.')].concat(pasos);
+    return {
+      titulo: apagada ? 'Enciende tu ubicación' : 'Activa la ubicación para esta página',
+      intro: apagada
+        ? 'No pudimos leer tu ubicación. Para hacer efectiva tu firma necesitamos que la actives:'
+        : 'Tu navegador tiene bloqueada la ubicación para esta página y no volverá a preguntar solo. Actívala así:',
+      pasos, botones: ['recargar', 'reintentar'],
+    };
+  }
+  function abrirGuia(motivo) {
+    const g = pasosGuia(motivo);
+    $('guia-titulo').textContent = g.titulo;
+    $('guia-intro').textContent = g.intro;
+    $('guia-pasos').innerHTML = g.pasos.map((p) => '<li>' + p + '</li>').join('');
+    ['recargar', 'reintentar', 'chrome', 'copiar'].forEach((b) => $('guia-' + b).classList.toggle('oculto', !g.botones.includes(b)));
+    $('guia-copiado').textContent = '';
+    $('guia-ubicacion').classList.remove('oculto');
+    document.body.style.overflow = 'hidden';
+  }
+  function cerrarGuia() {
+    $('guia-ubicacion').classList.add('oculto');
+    document.body.style.overflow = '';
+  }
+  $('guia-cerrar').addEventListener('click', cerrarGuia);
+  $('guia-recargar').addEventListener('click', () => location.reload());
+  $('guia-reintentar').addEventListener('click', () => { cerrarGuia(); pedirUbicacion(); });
+  $('guia-chrome').addEventListener('click', () => {
+    location.href = 'intent://' + location.host + location.pathname + location.search + '#Intent;scheme=https;package=com.android.chrome;end';
+  });
+  $('guia-copiar').addEventListener('click', () => {
+    const listo = () => { $('guia-copiado').textContent = 'Link copiado. Pégalo en ' + (NAV.ios ? 'Safari' : 'Chrome') + '.'; };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(location.href).then(listo, () => window.prompt('Copia este link:', location.href));
+    else window.prompt('Copia este link:', location.href);
+  });
 
   /* ---------------- Campos ---------------- */
   function llenarTipos(tipos) {
