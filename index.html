@@ -13,12 +13,14 @@
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
 <!--
   Página de firma de autorizaciones de imagen de Bia.
-  El texto de la carta, la generación del PDF, Drive, el registro y Slack viven en el Apps Script
+  Arriba la persona llena el formulario y firma; abajo ve el documento llenándose mientras escribe.
+  El texto de la carta, el PDF, Drive, el registro y Slack viven en el Apps Script
   "Autorizaciones de Imagen - Bia" (Drive: AUV/25. Autorizaciones de Imagen/04_Registro/Automatizacion).
-  Esta página solo muestra la carta y envía la firma; no usa las cuentas de Google de quien firma.
+  Al firmar se envía también la evidencia técnica: IP y ubicación aproximada, GPS (si la persona lo permite),
+  dispositivo, navegador y horas.
 -->
 <style>
-  :root { --tinta: #0a0a0a; --suave: #5b6170; --linea: #dcdfe4; --fondo: #e9ebee; --error: #b42318; --ok: #067647; }
+  :root { --tinta: #0a0a0a; --suave: #5b6170; --linea: #dcdfe4; --fondo: #e9ebee; --error: #b42318; --ok: #067647; --relleno: #eef4ff; }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--fondo); color: var(--tinta); font: 15px/1.55 Geist, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
 
@@ -35,14 +37,9 @@
   }
 
   h1 { font-size: 20px; font-weight: 700; margin: 0 0 4px; letter-spacing: -.01em; }
-  .sub { color: var(--suave); margin: 0 0 20px; }
-  .carta { border: 1px solid var(--linea); border-radius: 10px; padding: 20px; max-height: 55vh; overflow-y: auto; font-size: 14px; text-align: justify; background: rgba(255,255,255,.85); }
-  .carta h2 { font-size: 14px; font-weight: 700; text-align: center; margin: 0 0 12px; }
-  .carta p { margin: 0 0 10px; }
-  .carta .estado { text-align: center; color: var(--suave); }
-  .aviso-lectura { font-size: 13px; color: var(--suave); margin: 8px 0 28px; }
-  fieldset { border: 0; padding: 0; margin: 0 0 8px; }
-  legend { font-weight: 700; font-size: 16px; margin-bottom: 4px; }
+  h3 { font-size: 16px; font-weight: 700; margin: 28px 0 4px; }
+  .sub { color: var(--suave); margin: 0 0 16px; }
+  .aviso { font-size: 13px; color: var(--suave); border-left: 3px solid var(--linea); padding: 4px 0 4px 12px; margin: 0 0 20px; }
   label { display: block; font-size: 13px; font-weight: 600; margin: 14px 0 6px; }
   input[type=text], input[type=email], input[type=tel], select { width: 100%; padding: 12px; border: 1px solid var(--linea); border-radius: 8px; font: inherit; background: #fff; color: var(--tinta); }
   input:focus, select:focus { outline: 2px solid var(--tinta); outline-offset: 1px; }
@@ -51,13 +48,13 @@
   .check { display: flex; gap: 10px; align-items: flex-start; font-weight: 400; font-size: 14px; margin-top: 16px; }
   .check input { margin-top: 3px; width: 18px; height: 18px; flex: none; accent-color: var(--tinta); }
   .menor { border-left: 3px solid var(--linea); padding-left: 12px; margin-top: 8px; }
-  .lienzo { position: relative; border: 1px dashed #9aa0ad; border-radius: 8px; background: #fff; touch-action: none; }
-  canvas { display: block; width: 100%; height: 180px; }
-  .lienzo .guia { position: absolute; left: 16px; right: 16px; bottom: 36px; border-bottom: 1px solid var(--linea); pointer-events: none; }
-  .acciones-firma { display: flex; justify-content: space-between; font-size: 13px; color: var(--suave); margin-top: 6px; }
+
   .modos { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
   .modo { flex: 1; min-width: 150px; padding: 10px 12px; border: 1px solid var(--linea); border-radius: 8px; background: #fff; color: var(--tinta); font: 600 14px/1.2 Geist, Arial, sans-serif; cursor: pointer; }
   .modo.activo { background: var(--tinta); border-color: var(--tinta); color: #fff; }
+  .lienzo { position: relative; border: 1px dashed #9aa0ad; border-radius: 8px; background: #fff; touch-action: none; }
+  canvas { display: block; width: 100%; height: 180px; }
+  .lienzo .guia { position: absolute; left: 16px; right: 16px; bottom: 36px; border-bottom: 1px solid var(--linea); pointer-events: none; }
   .subir { display: block; margin: 0; padding: 22px 16px; border: 1px dashed #9aa0ad; border-radius: 8px; background: #fff; text-align: center; cursor: pointer; }
   .subir:hover, .subir:focus-within { border-color: var(--tinta); }
   .subir-titulo { display: block; font-weight: 700; font-size: 15px; }
@@ -65,9 +62,28 @@
   .visualmente-oculto { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
   .vista { margin-top: 10px; padding: 16px; border: 1px solid var(--linea); border-radius: 8px; background: #fff; text-align: center; }
   .vista img { max-width: 100%; max-height: 160px; }
+  .acciones-firma { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; color: var(--suave); margin-top: 6px; }
   button.link { background: none; border: 0; color: var(--tinta); text-decoration: underline; font: inherit; cursor: pointer; padding: 0; }
+
+  /* El documento que se va llenando. */
+  .documento { margin-top: 8px; border: 1px solid var(--linea); border-radius: 10px; padding: 28px 28px 20px; background: rgba(255,255,255,.9); font-size: 14px; text-align: justify; }
+  @media (max-width: 520px) { .documento { padding: 20px 16px 16px; } }
+  .documento p { margin: 0 0 10px; }
+  .documento .titulo { text-align: center; font-weight: 700; margin-bottom: 14px; }
+  .documento .centro { text-align: center; }
+  .documento .negrita { font-weight: 700; }
+  .documento .pequeno { font-size: 11px; color: var(--suave); }
+  .documento .sangria { text-indent: 36px; }
+  .campo { font-weight: 700; background: var(--relleno); border-radius: 3px; padding: 0 2px; transition: background .3s; }
+  .campo.vacio { font-weight: 400; color: #9aa0ad; background: none; }
+  .firma-doc { display: inline-block; min-height: 60px; }
+  .firma-doc img { max-width: 220px; max-height: 90px; display: block; margin: 0 auto; }
+  .firma-doc .hueco { display: inline-block; padding: 18px 24px; border: 1px dashed #c4c8d0; border-radius: 6px; color: #9aa0ad; font-size: 13px; }
+  .documento .estado { text-align: center; color: var(--suave); }
+
   button.principal { width: 100%; margin-top: 24px; padding: 14px; border: 0; border-radius: 10px; background: var(--tinta); color: #fff; font: 600 16px/1 Geist, Arial, sans-serif; cursor: pointer; }
   button.principal:disabled { opacity: .45; cursor: default; }
+  .pendientes { font-size: 13px; color: var(--suave); margin-top: 8px; min-height: 1em; }
   .error { color: var(--error); font-size: 14px; margin-top: 12px; min-height: 1em; }
   .listo { text-align: center; padding: 40px 0; }
   .listo h2 { color: var(--ok); margin-top: 0; }
@@ -83,72 +99,70 @@
   <main class="contenido">
     <div id="paso-firma">
       <h1>Autorización de uso de imagen</h1>
-      <p class="sub">Lee la carta completa, llena tus datos y firma al final.</p>
-
-      <div class="carta" id="carta" tabindex="0" aria-label="Texto de la carta"><p class="estado">Cargando la carta…</p></div>
-      <p class="aviso-lectura" id="aviso-lectura">Baja hasta el final de la carta para poder firmar.</p>
+      <p class="sub">Llena tus datos y firma. Abajo verás cómo va quedando tu documento.</p>
+      <p class="aviso">Para que tu firma tenga validez, al firmar guardamos la fecha y hora, la dirección IP y la ubicación aproximada de tu conexión, el tipo de dispositivo y navegador, y tu ubicación exacta si nos das permiso.</p>
 
       <form id="formulario" novalidate>
-        <fieldset>
-          <legend>Tus datos</legend>
-          <label for="nombre">Nombre completo</label>
-          <input type="text" id="nombre" autocomplete="name" required>
+        <h3>Tus datos</h3>
+        <label for="nombre">Nombre completo</label>
+        <input type="text" id="nombre" autocomplete="name" required>
 
+        <div class="fila">
+          <div>
+            <label for="tipoDocumento">Tipo de documento</label>
+            <select id="tipoDocumento" required></select>
+          </div>
+          <div>
+            <label for="numeroDocumento">Número de documento</label>
+            <input type="text" id="numeroDocumento" inputmode="numeric" required>
+          </div>
+        </div>
+
+        <div class="fila">
+          <div>
+            <label for="correo">Correo</label>
+            <input type="email" id="correo" autocomplete="email" required>
+          </div>
+          <div>
+            <label for="telefono">Teléfono (opcional)</label>
+            <input type="tel" id="telefono" autocomplete="tel">
+          </div>
+        </div>
+
+        <label for="ciudad">Ciudad donde firmas</label>
+        <select id="ciudad" required></select>
+        <div id="bloque-otra-ciudad" class="oculto">
+          <label for="otraCiudad" id="etiqueta-otra-ciudad">Escribe la ciudad</label>
+          <input type="text" id="otraCiudad" autocomplete="address-level2">
+        </div>
+
+        <label class="check"><input type="checkbox" id="esMenor"> La persona que aparece en el material es menor de edad (firma su representante legal).</label>
+        <div class="menor oculto" id="bloque-menor">
+          <label for="repNombre">Nombre del representante legal</label>
+          <input type="text" id="repNombre">
           <div class="fila">
             <div>
-              <label for="tipoDocumento">Tipo de documento</label>
-              <select id="tipoDocumento" required></select>
+              <label for="repTipoDocumento">Tipo de documento</label>
+              <select id="repTipoDocumento"></select>
             </div>
             <div>
-              <label for="numeroDocumento">Número de documento</label>
-              <input type="text" id="numeroDocumento" inputmode="numeric" required>
+              <label for="repNumeroDocumento">Número de documento</label>
+              <input type="text" id="repNumeroDocumento" inputmode="numeric">
             </div>
           </div>
+          <label for="repParentesco">Parentesco con el menor</label>
+          <input type="text" id="repParentesco" placeholder="Madre, padre, tutor…">
+        </div>
 
-          <div class="fila">
-            <div>
-              <label for="correo">Correo</label>
-              <input type="email" id="correo" autocomplete="email" required>
-            </div>
-            <div>
-              <label for="telefono">Teléfono (opcional)</label>
-              <input type="tel" id="telefono" autocomplete="tel">
-            </div>
-          </div>
-
-          <label for="ciudad">Ciudad donde firmas</label>
-          <input type="text" id="ciudad" autocomplete="address-level2" required>
-
-          <label class="check"><input type="checkbox" id="esMenor"> La persona que aparece en el material es menor de edad (firma su representante legal).</label>
-          <div class="menor oculto" id="bloque-menor">
-            <label for="repNombre">Nombre del representante legal</label>
-            <input type="text" id="repNombre">
-            <div class="fila">
-              <div>
-                <label for="repTipoDocumento">Tipo de documento</label>
-                <select id="repTipoDocumento"></select>
-              </div>
-              <div>
-                <label for="repNumeroDocumento">Número de documento</label>
-                <input type="text" id="repNumeroDocumento" inputmode="numeric">
-              </div>
-            </div>
-            <label for="repParentesco">Parentesco con el menor</label>
-            <input type="text" id="repParentesco" placeholder="Madre, padre, tutor…">
-          </div>
-        </fieldset>
-
-        <label>Firma</label>
+        <h3>Tu firma</h3>
         <div class="modos" role="tablist" aria-label="Cómo quieres firmar">
           <button type="button" class="modo activo" role="tab" aria-selected="true" id="modo-dibujar">Dibujar aquí</button>
           <button type="button" class="modo" role="tab" aria-selected="false" id="modo-subir">Subir imagen de mi firma</button>
         </div>
-
         <div id="panel-dibujar">
           <div class="lienzo"><canvas id="lienzo" aria-label="Espacio para firmar"></canvas><div class="guia"></div></div>
           <div class="acciones-firma"><span>Firma con el dedo o el mouse.</span><button type="button" class="link" id="borrar">Borrar firma</button></div>
         </div>
-
         <div id="panel-subir" class="oculto">
           <label class="subir" for="archivo-firma">
             <span class="subir-titulo">Elegir imagen de mi firma</span>
@@ -159,9 +173,15 @@
           <div class="acciones-firma oculto" id="acciones-subida"><span>Así quedará en el documento.</span><button type="button" class="link" id="quitar-imagen">Cambiar imagen</button></div>
         </div>
 
-        <label class="check"><input type="checkbox" id="acepta"> Leí la carta completa y acepto sus términos. Entiendo que esta firma electrónica tiene la misma validez que mi firma a mano.</label>
+        <h3>Tu documento</h3>
+        <p class="sub">Se va llenando con lo que escribes. Léelo completo antes de firmar.</p>
+        <div class="documento" id="documento"><p class="estado">Cargando el documento…</p></div>
+        <div id="fin-documento" aria-hidden="true"></div>
+
+        <label class="check"><input type="checkbox" id="acepta"> Leí el documento completo y acepto sus términos. Entiendo que esta firma electrónica tiene la misma validez que mi firma a mano y autorizo el registro de los datos de la firma (fecha, IP, ubicación y dispositivo).</label>
 
         <button type="submit" class="principal" id="enviar" disabled>Firmar</button>
+        <p class="pendientes" id="pendientes"></p>
         <p class="error" id="error" role="alert"></p>
       </form>
     </div>
@@ -178,13 +198,80 @@
   // Apps Script "Autorizaciones de Imagen - Bia" (versión publicada para cualquier persona).
   const API = 'https://script.google.com/macros/s/AKfycbwBpL7Vohu2_kb5dFitWJOOvSAKm2OAJZGzsJglsbIFABwYUTsUI5iNHZ7qE7JBj-r3lw/exec';
   const TIPOS_DOCUMENTO = ['Cédula de ciudadanía', 'Cédula de extranjería', 'Pasaporte', 'Tarjeta de identidad', 'PPT'];
+  const CIUDADES_PRINCIPALES = ['Bogotá D.C.', 'Medellín', 'Cali', 'Barranquilla', 'Cartagena', 'Bucaramanga', 'Cúcuta',
+    'Pereira', 'Santa Marta', 'Ibagué', 'Manizales', 'Villavicencio', 'Pasto', 'Montería', 'Neiva', 'Armenia',
+    'Valledupar', 'Sincelejo', 'Popayán', 'Tunja'];
+  const OTRAS_CIUDADES = ['Acacías', 'Aguachica', 'Apartadó', 'Arauca', 'Barrancabermeja', 'Bello', 'Buenaventura',
+    'Buga', 'Cajicá', 'Calarcá', 'Caldas', 'Candelaria', 'Cartago', 'Caucasia', 'Cereté', 'Chía', 'Chinchiná',
+    'Chiquinquirá', 'Ciénaga', 'Copacabana', 'Cota', 'Duitama', 'Dosquebradas', 'El Carmen de Bolívar', 'Envigado',
+    'Espinal', 'Facatativá', 'Florencia', 'Floridablanca', 'Funza', 'Fusagasugá', 'Galapa', 'Garzón', 'Girardot',
+    'Girón', 'Granada', 'Inírida', 'Ipiales', 'Itagüí', 'Jamundí', 'La Ceja', 'La Dorada',
+    'La Estrella', 'Leticia', 'Lorica', 'Los Patios', 'Madrid', 'Magangué', 'Maicao', 'Malambo', 'Marinilla',
+    'Mitú', 'Mocoa', 'Mosquera', 'Ocaña', 'Palmira', 'Pamplona', 'Piedecuesta', 'Pitalito', 'Planeta Rica',
+    'Puerto Asís', 'Puerto Boyacá', 'Puerto Carreño', 'Puerto Colombia', 'Quibdó', 'Riohacha', 'Rionegro',
+    'Sabanalarga', 'Sabaneta', 'Sahagún', 'San Andrés', 'San Gil', 'San José del Guaviare', 'Santa Rosa de Cabal',
+    'Santander de Quilichao', 'Soacha', 'Sogamoso', 'Soledad', 'Tierralta', 'Tuluá', 'Tumaco', 'Turbaco', 'Turbo',
+    'Uribia', 'Villa del Rosario', 'Yopal', 'Yumbo', 'Zipaquirá'];
+  const OTRA_COLOMBIA = '__otra_colombia__', FUERA_COLOMBIA = '__fuera__';
   const $ = (id) => document.getElementById(id);
 
-  // El proyecto ya no se pide en el formulario; si el link trae ?proyecto=..., se guarda para ordenar el registro.
+  // El proyecto no se pide en el formulario; si el link trae ?proyecto=..., se guarda para ordenar el registro.
   const PROYECTO = (new URLSearchParams(location.search).get('proyecto') || '').trim();
-  let modo = 'dibujar', firmaSubida = null;
+  let modo = 'dibujar', firmaSubida = null, firmaDibujada = null, trazos = 0, dibujando = false;
+  let documentoListo = false, leida = false, enNegrita = ['NOMBRE_COMPLETO', 'TIPO_DOCUMENTO', 'NUMERO_DOCUMENTO', 'CIUDAD_FIRMA', 'CORREO', 'TELEFONO', 'REPRESENTANTE'];
 
-  // Campos
+  /* ---------------- Evidencia de la firma ---------------- */
+  const evidencia = {
+    paginaAbierta: new Date().toISOString(),
+    zonaHoraria: (Intl.DateTimeFormat().resolvedOptions() || {}).timeZone || '',
+    idioma: navigator.language || '',
+    pantalla: screen.width + 'x' + screen.height + ' @' + (window.devicePixelRatio || 1) + 'x',
+    userAgent: navigator.userAgent,
+    dispositivo: describirDispositivo(),
+    gpsEstado: 'Sin respuesta',
+  };
+  function describirDispositivo() {
+    const ua = navigator.userAgent;
+    const so = /iPhone/.test(ua) ? 'iPhone' : /iPad/.test(ua) ? 'iPad' : /Android/.test(ua) ? 'Android'
+      : /Mac OS X/.test(ua) ? 'Mac' : /Windows/.test(ua) ? 'Windows' : /Linux/.test(ua) ? 'Linux' : 'Otro sistema';
+    const nav = /Edg\//.test(ua) ? 'Edge' : /OPR\//.test(ua) ? 'Opera' : /SamsungBrowser/.test(ua) ? 'Samsung Internet'
+      : /CriOS|Chrome\//.test(ua) ? 'Chrome' : /FxiOS|Firefox\//.test(ua) ? 'Firefox' : /Safari\//.test(ua) ? 'Safari' : 'otro navegador';
+    const tipo = /iPad|Tablet/.test(ua) || (/Android/.test(ua) && !/Mobile/.test(ua)) ? 'Tablet'
+      : /Mobi|iPhone|Android/.test(ua) ? 'Celular' : 'Computador';
+    return tipo + ' ' + so + ', ' + nav;
+  }
+  // IP pública y ubicación aproximada según la IP. Si un servicio falla, se intenta el otro.
+  const promesaIp = fetch('https://ipapi.co/json/', { credentials: 'omit' })
+    .then((r) => r.json())
+    .then((d) => {
+      if (!d || !d.ip || d.error) throw new Error('sin ip');
+      evidencia.ip = d.ip;
+      evidencia.ubicacionIp = [d.city, d.region, d.country_name].filter(Boolean).join(', ');
+      evidencia.proveedorInternet = d.org || '';
+    })
+    .catch(() => fetch('https://api.ipify.org?format=json', { credentials: 'omit' })
+      .then((r) => r.json()).then((d) => { evidencia.ip = d.ip; }))
+    .catch(() => { evidencia.ip = ''; });
+  // Ubicación exacta (GPS): se pide una sola vez, cuando la persona empieza a llenar el formulario.
+  let promesaGps = null;
+  function pedirUbicacion() {
+    if (promesaGps) return promesaGps;
+    promesaGps = new Promise((listo) => {
+      if (!navigator.geolocation) { evidencia.gpsEstado = 'Navegador sin GPS'; return listo(); }
+      navigator.geolocation.getCurrentPosition(
+        (p) => {
+          evidencia.gps = { lat: p.coords.latitude, lng: p.coords.longitude, precision: p.coords.accuracy, hora: new Date(p.timestamp).toISOString() };
+          evidencia.gpsEstado = 'Autorizó';
+          listo();
+        },
+        (e) => { evidencia.gpsEstado = e.code === 1 ? 'No autorizó' : 'No disponible'; listo(); },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+    });
+    return promesaGps;
+  }
+  $('formulario').addEventListener('focusin', pedirUbicacion, { once: true });
+
+  /* ---------------- Campos ---------------- */
   function llenarTipos(tipos) {
     ['tipoDocumento', 'repTipoDocumento'].forEach((id) => {
       $(id).innerHTML = '';
@@ -192,63 +279,175 @@
     });
   }
   llenarTipos(TIPOS_DOCUMENTO);
-  $('esMenor').addEventListener('change', () => $('bloque-menor').classList.toggle('oculto', !$('esMenor').checked));
-  $('acepta').addEventListener('change', actualizarBoton);
 
-  // Carta: se trae del Apps Script sin credenciales, así no importa qué cuentas de Google tenga abiertas quien firma.
-  const carta = $('carta');
-  let leida = false, cartaLista = false;
-  function revisarLectura() {
-    if (cartaLista && carta.scrollTop + carta.clientHeight >= carta.scrollHeight - 24) {
+  (function llenarCiudades() {
+    const sel = $('ciudad');
+    sel.add(new Option('Elige la ciudad…', ''));
+    const grupo = (titulo, lista) => {
+      const g = document.createElement('optgroup');
+      g.label = titulo;
+      lista.forEach((c) => g.appendChild(new Option(c, c)));
+      sel.appendChild(g);
+    };
+    grupo('Ciudades principales', CIUDADES_PRINCIPALES);
+    grupo('Otras ciudades (A–Z)', OTRAS_CIUDADES.slice().sort((a, b) => a.localeCompare(b, 'es')));
+    const g = document.createElement('optgroup');
+    g.label = '¿No está en la lista?';
+    g.appendChild(new Option('Otra ciudad de Colombia (escribirla)', OTRA_COLOMBIA));
+    g.appendChild(new Option('Fuera de Colombia (escribirla)', FUERA_COLOMBIA));
+    sel.appendChild(g);
+  })();
+  $('ciudad').addEventListener('change', () => {
+    const v = $('ciudad').value, otra = v === OTRA_COLOMBIA || v === FUERA_COLOMBIA;
+    $('bloque-otra-ciudad').classList.toggle('oculto', !otra);
+    $('etiqueta-otra-ciudad').textContent = v === FUERA_COLOMBIA ? 'Escribe la ciudad y el país' : 'Escribe la ciudad';
+    if (otra) $('otraCiudad').focus();
+    actualizar();
+  });
+  function ciudadElegida() {
+    const v = $('ciudad').value;
+    if (v === OTRA_COLOMBIA || v === FUERA_COLOMBIA) return $('otraCiudad').value.trim();
+    return v;
+  }
+
+  $('esMenor').addEventListener('change', () => { $('bloque-menor').classList.toggle('oculto', !$('esMenor').checked); actualizar(); });
+  $('formulario').addEventListener('input', actualizar);
+  $('acepta').addEventListener('change', actualizar);
+
+  /* ---------------- Documento que se llena ---------------- */
+  const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+  function fechaHoy() {
+    const d = new Date();
+    return d.getDate() + ' de ' + MESES[d.getMonth()] + ' de ' + d.getFullYear() + ', ' +
+      String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  }
+  function nombrePropio(t) {
+    const menores = ['de', 'del', 'la', 'las', 'los', 'y', 'e'];
+    return t.replace(/\s+/g, ' ').trim().toLowerCase().split(' ')
+      .map((p, i) => (i > 0 && menores.includes(p)) ? p : p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+  }
+  function valores() {
+    const v = (id) => $(id).value.trim();
+    return {
+      PROYECTO: PROYECTO,
+      NOMBRE_COMPLETO: nombrePropio(v('nombre')),
+      TIPO_DOCUMENTO: v('tipoDocumento'),
+      NUMERO_DOCUMENTO: v('numeroDocumento'),
+      CIUDAD_FIRMA: nombrePropio(ciudadElegida()),
+      FECHA_FIRMA: fechaHoy(),
+      CORREO: v('correo').toLowerCase(),
+      TELEFONO: v('telefono'),
+      REPRESENTANTE: $('esMenor').checked
+        ? 'Firma como representante legal del menor: ' + (nombrePropio(v('repNombre')) || '________') + ', ' + v('repTipoDocumento') +
+          ' No. ' + (v('repNumeroDocumento') || '________') + ' (' + (v('repParentesco') || '________') + ').'
+        : '',
+    };
+  }
+  const VACIO = { NOMBRE_COMPLETO: 'tu nombre completo', TIPO_DOCUMENTO: 'tipo de documento', NUMERO_DOCUMENTO: 'número',
+    CIUDAD_FIRMA: 'ciudad', CORREO: 'tu correo', TELEFONO: 'tu teléfono', PROYECTO: '' };
+
+  function pintarDocumento(parrafos) {
+    const doc = $('documento');
+    doc.innerHTML = '';
+    parrafos.forEach((p) => {
+      const el = document.createElement('p');
+      if (p.titulo) el.classList.add('titulo');
+      if (p.centro) el.classList.add('centro');
+      if (p.negrita) el.classList.add('negrita');
+      if (p.pequeno) el.classList.add('pequeno');
+      if (p.sangria) el.classList.add('sangria');
+      if (/^\s*\{\{FIRMA\}\}\s*$/.test(p.texto)) {
+        el.innerHTML = '<span class="firma-doc" id="firma-doc"></span>';
+      } else if (/^\s*\{\{CONSTANCIA\}\}\s*$/.test(p.texto)) {
+        el.textContent = 'Al firmar se agrega aquí la constancia de firma electrónica: ID, fecha y hora, IP, ubicación y dispositivo.';
+      } else if (/^\s*\{\{REPRESENTANTE\}\}\s*$/.test(p.texto)) {
+        el.innerHTML = '<span data-m="REPRESENTANTE"></span>';
+        el.dataset.soloSiHay = 'REPRESENTANTE';
+      } else {
+        p.texto.split(/(\{\{[A-Z_]+\}\})/).forEach((parte) => {
+          const m = parte.match(/^\{\{([A-Z_]+)\}\}$/);
+          if (!m) { el.appendChild(document.createTextNode(parte)); return; }
+          const s = document.createElement('span');
+          s.dataset.m = m[1];
+          el.appendChild(s);
+        });
+      }
+      doc.appendChild(el);
+    });
+    documentoListo = true;
+    actualizar();
+  }
+
+  function actualizar() {
+    if (documentoListo) {
+      const val = valores();
+      document.querySelectorAll('#documento [data-m]').forEach((s) => {
+        const k = s.dataset.m, texto = val[k] || '';
+        if (k === 'REPRESENTANTE' || k === 'FECHA_FIRMA') { s.textContent = texto; return; }
+        s.textContent = texto || (VACIO[k] !== undefined ? VACIO[k] : '________');
+        s.className = (texto && enNegrita.includes(k)) ? 'campo' : (texto ? '' : 'campo vacio');
+      });
+      document.querySelectorAll('#documento [data-solo-si-hay]').forEach((p) => p.classList.toggle('oculto', !val[p.dataset.soloSiHay]));
+      const lugar = $('firma-doc');
+      if (lugar) {
+        const img = modo === 'dibujar' ? firmaDibujada : firmaSubida;
+        lugar.innerHTML = img ? '<img alt="Tu firma">' : '<span class="hueco">Aquí va tu firma</span>';
+        if (img) lugar.querySelector('img').src = img;
+      }
+    }
+    actualizarBoton();
+  }
+  setInterval(() => { if (documentoListo) actualizar(); }, 30000);
+
+  // El documento se marca como leído cuando la persona llega al final.
+  new IntersectionObserver((entradas) => {
+    if (documentoListo && entradas.some((e) => e.isIntersecting) && !leida) {
       leida = true;
-      $('aviso-lectura').textContent = 'Leíste la carta completa.';
+      evidencia.documentoLeido = new Date().toISOString();
       actualizarBoton();
     }
-  }
-  carta.addEventListener('scroll', revisarLectura);
-  function cargarCarta() {
-    carta.innerHTML = '<p class="estado">Cargando la carta…</p>';
+  }).observe($('fin-documento'));
+
+  function cargarDocumento() {
+    $('documento').innerHTML = '<p class="estado">Cargando el documento…</p>';
     fetch(API + '?api=datos', { credentials: 'omit' })
       .then((r) => r.json())
       .then((d) => {
         if (!d.ok) throw new Error(d.error || 'Sin datos');
         if (d.tiposDocumento) llenarTipos(d.tiposDocumento);
-        carta.innerHTML = '';
-        d.parrafos.forEach((p) => {
-          const el = document.createElement(p.titulo ? 'h2' : 'p');
-          el.textContent = p.texto;
-          carta.appendChild(el);
-        });
-        cartaLista = true;
-        revisarLectura();
+        if (d.enNegrita) enNegrita = d.enNegrita;
+        pintarDocumento(d.parrafos);
       })
       .catch(() => {
-        carta.innerHTML = '<p class="estado">No se pudo cargar la carta. <button type="button" class="link" id="reintentar">Intentar de nuevo</button></p>';
-        $('reintentar').addEventListener('click', cargarCarta);
+        $('documento').innerHTML = '<p class="estado">No se pudo cargar el documento. <button type="button" class="link" id="reintentar">Intentar de nuevo</button></p>';
+        $('reintentar').addEventListener('click', cargarDocumento);
       });
   }
-  cargarCarta();
+  cargarDocumento();
 
-  // Firma
+  /* ---------------- Firma: dibujar o subir ---------------- */
   const lienzo = $('lienzo');
   const ctx = lienzo.getContext('2d');
-  let trazos = 0, dibujando = false;
   function ajustarLienzo() {
     const r = lienzo.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
     lienzo.width = r.width * dpr; lienzo.height = r.height * dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.lineWidth = 2.2; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#0a0a0a';
-    trazos = 0; actualizarBoton();
+    trazos = 0; firmaDibujada = null; actualizar();
   }
   function punto(e) { const r = lienzo.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
   lienzo.addEventListener('pointerdown', (e) => { dibujando = true; lienzo.setPointerCapture(e.pointerId); ctx.beginPath(); ctx.moveTo(...punto(e)); });
   lienzo.addEventListener('pointermove', (e) => { if (!dibujando) return; ctx.lineTo(...punto(e)); ctx.stroke(); });
-  lienzo.addEventListener('pointerup', () => { if (dibujando) { dibujando = false; trazos++; actualizarBoton(); } });
+  lienzo.addEventListener('pointerup', () => {
+    if (!dibujando) return;
+    dibujando = false; trazos++;
+    firmaDibujada = recortar(lienzo);
+    actualizar();
+  });
   $('borrar').addEventListener('click', ajustarLienzo);
   window.addEventListener('resize', () => { if (!trazos && modo === 'dibujar') ajustarLienzo(); });
   ajustarLienzo();
 
-  // Dos formas de firmar: dibujar en pantalla o subir una imagen de la firma que la persona ya tiene.
   function cambiarModo(nuevo) {
     modo = nuevo;
     $('modo-dibujar').classList.toggle('activo', modo === 'dibujar');
@@ -258,21 +457,19 @@
     $('panel-dibujar').classList.toggle('oculto', modo !== 'dibujar');
     $('panel-subir').classList.toggle('oculto', modo !== 'subir');
     if (modo === 'dibujar' && !trazos) ajustarLienzo();
-    actualizarBoton();
+    actualizar();
   }
   $('modo-dibujar').addEventListener('click', () => cambiarModo('dibujar'));
   $('modo-subir').addEventListener('click', () => cambiarModo('subir'));
 
-  function quitarImagen() {
+  $('quitar-imagen').addEventListener('click', () => {
     firmaSubida = null;
     $('archivo-firma').value = '';
     $('vista-firma').classList.add('oculto');
     $('acciones-subida').classList.add('oculto');
     $('archivo-firma').click();
-    actualizarBoton();
-  }
-  $('quitar-imagen').addEventListener('click', quitarImagen);
-
+    actualizar();
+  });
   $('archivo-firma').addEventListener('change', (e) => {
     const archivo = e.target.files && e.target.files[0];
     $('error').textContent = '';
@@ -290,12 +487,9 @@
         $('vista-firma').classList.remove('oculto');
         $('acciones-subida').classList.remove('oculto');
       }
-      actualizarBoton();
+      actualizar();
     };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      $('error').textContent = 'No se pudo leer la imagen. Usa un archivo PNG o JPG.';
-    };
+    img.onerror = () => { URL.revokeObjectURL(url); $('error').textContent = 'No se pudo leer la imagen. Usa un archivo PNG o JPG.'; };
     img.src = url;
   });
 
@@ -322,12 +516,7 @@
     return null;
   }
 
-  function actualizarBoton() {
-    const hayFirma = modo === 'dibujar' ? trazos > 0 : !!firmaSubida;
-    $('enviar').disabled = !(leida && hayFirma && $('acepta').checked);
-  }
-
-  /** Recorta el espacio transparente alrededor de la firma para que quede bien en el PDF. Devuelve null si está vacía. */
+  /** Recorta el espacio transparente alrededor de la firma. Devuelve null si está vacía. */
   function recortar(origen) {
     const w = origen.width, h = origen.height, px = origen.getContext('2d').getImageData(0, 0, w, h).data;
     let x0 = w, y0 = h, x1 = -1, y1 = -1;
@@ -341,19 +530,44 @@
     return c.toDataURL('image/png');
   }
 
-  $('formulario').addEventListener('submit', (e) => {
+  /* ---------------- Enviar ---------------- */
+  function faltantes() {
+    const f = [];
+    const v = (id) => $(id).value.trim();
+    if (v('nombre').split(/\s+/).length < 2) f.push('nombre y apellido');
+    if (v('numeroDocumento').length < 4) f.push('número de documento');
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v('correo'))) f.push('correo');
+    if (!ciudadElegida()) f.push('ciudad');
+    if ($('esMenor').checked && (!v('repNombre') || !v('repNumeroDocumento') || !v('repParentesco'))) f.push('datos del representante');
+    if (!(modo === 'dibujar' ? firmaDibujada : firmaSubida)) f.push('firma');
+    if (!leida) f.push('leer el documento hasta el final');
+    if (!$('acepta').checked) f.push('aceptar');
+    return f;
+  }
+  function actualizarBoton() {
+    const f = faltantes();
+    $('enviar').disabled = f.length > 0;
+    $('pendientes').textContent = f.length ? 'Falta: ' + f.join(', ') + '.' : '';
+  }
+
+  $('formulario').addEventListener('submit', async (e) => {
     e.preventDefault();
+    if (faltantes().length) return;
     $('error').textContent = '';
     $('enviar').disabled = true;
     $('enviar').textContent = 'Firmando…';
+    // Se espera un momento la IP y el GPS si todavía no llegaron.
+    await Promise.race([Promise.all([promesaIp, pedirUbicacion()]), new Promise((r) => setTimeout(r, 6000))]);
+    evidencia.horaDispositivo = new Date().toString();
     const v = (id) => $(id).value;
     const datos = {
       proyecto: PROYECTO, nombre: v('nombre'), tipoDocumento: v('tipoDocumento'), numeroDocumento: v('numeroDocumento'),
-      correo: v('correo'), telefono: v('telefono'), ciudad: v('ciudad'), acepta: $('acepta').checked,
+      correo: v('correo'), telefono: v('telefono'), ciudad: ciudadElegida(), acepta: $('acepta').checked,
       esMenor: $('esMenor').checked, repNombre: v('repNombre'), repTipoDocumento: v('repTipoDocumento'),
       repNumeroDocumento: v('repNumeroDocumento'), repParentesco: v('repParentesco'),
-      firmaPng: modo === 'dibujar' ? recortar(lienzo) : firmaSubida,
+      firmaPng: modo === 'dibujar' ? firmaDibujada : firmaSubida,
       origenFirma: modo === 'dibujar' ? 'dibujo' : 'imagen',
+      evidencia: evidencia,
     };
     // text/plain evita la verificación previa de CORS, que Apps Script no responde.
     fetch(API, { method: 'POST', credentials: 'omit', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(datos) })
