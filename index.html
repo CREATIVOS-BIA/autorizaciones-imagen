@@ -50,6 +50,8 @@
   .ubicacion.ok .estado-ubicacion { color: var(--ok); }
   .ubicacion.mal .estado-ubicacion { color: var(--error); }
   button.secundario { padding: 10px 14px; border: 0; border-radius: 8px; background: var(--tinta); color: #fff; font: 600 14px/1.2 Geist, Arial, sans-serif; cursor: pointer; }
+  .ver-guia { flex-basis: 100%; text-align: left; font-size: 13px; }
+  .boton-nativo { padding: 10px 14px; border-radius: 8px; background: #0a0a0a; color: #ffffff; font: 600 14px/1.2 Geist, Arial, sans-serif; }
   button.secundario:disabled { opacity: .5; cursor: default; }
   .ayuda { flex-basis: 100%; font-size: 13px; }
   .ayuda summary { cursor: pointer; font-weight: 600; }
@@ -150,6 +152,7 @@
         <div class="ubicacion" id="caja-ubicacion">
           <p class="estado-ubicacion" id="estado-ubicacion" role="status">Tu ubicación todavía no está activada.</p>
           <button type="button" class="secundario" id="activar-ubicacion">Activar mi ubicación</button>
+          <button type="button" class="link ver-guia oculto" id="ver-guia">¿No aparece el aviso? Ver cómo activarla</button>
         </div>
 
         <p class="legal"><b>Aviso de validez de la firma electrónica y tratamiento de datos.</b>
@@ -337,75 +340,136 @@
     $('caja-ubicacion').classList.toggle('ok', estado === 'ok');
     $('caja-ubicacion').classList.toggle('mal', estado === 'mal');
     $('estado-ubicacion').textContent = texto;
-    $('activar-ubicacion').classList.toggle('oculto', estado === 'ok');
+    // Con el botón propio de Chrome (<geolocation>) no se muestra el nuestro: el del navegador es el que puede volver a pedir permiso.
+    $('activar-ubicacion').classList.toggle('oculto', estado === 'ok' || !!botonNativo);
     $('activar-ubicacion').disabled = estado === 'pidiendo';
-    $('activar-ubicacion').textContent = estado === 'mal' ? 'Ver cómo activarla' : 'Activar mi ubicación';
+    if (botonNativo) botonNativo.classList.toggle('oculto', estado === 'ok');
+    $('ver-guia').classList.toggle('oculto', estado !== 'mal');
   }
 
-  function pedirUbicacion() {
+  /* Lo que se hace automáticamente, en orden:
+     1. Al abrir la página se pide la ubicación de una vez: aparece el aviso del navegador sin tocar nada.
+     2. Dentro de WhatsApp, Instagram o Facebook se manda a la persona a Chrome (Android) o Safari (iPhone).
+     3. En Chrome 144 o más nuevo el botón es el del propio navegador (<geolocation>): aunque la ubicación esté
+        bloqueada, al tocarlo Chrome muestra su propio paso para volver a permitirla.
+     4. En iPhone, si la bloquearon, el botón recarga la página: Safari vuelve a preguntar al recargar.
+     5. Solo si nada de eso es posible (ubicación del celular apagada o bloqueo que el navegador no deja quitar)
+        se muestra la guía paso a paso. */
+  const URL_PARAMS = new URLSearchParams(location.search);
+  const YA_RECARGO = URL_PARAMS.get('ubicacion') === '1';
+  let botonNativo = null;
+  if ('HTMLGeolocationElement' in window && !NAV.app) {
+    botonNativo = document.createElement('geolocation');
+    botonNativo.setAttribute('accuracymode', 'precise');
+    botonNativo.setAttribute('autolocate', '');
+    botonNativo.className = 'boton-nativo';
+    botonNativo.addEventListener('location', () => {
+      if (botonNativo.position) registrarPosicion(botonNativo.position);
+      else if (botonNativo.error) registrarFallo(botonNativo.error, 'nativo');
+    });
+    $('activar-ubicacion').after(botonNativo);
+  }
+
+  function registrarPosicion(p) {
+    evidencia.gps = { lat: p.coords.latitude, lng: p.coords.longitude, precision: p.coords.accuracy, hora: new Date(p.timestamp || Date.now()).toISOString() };
+    evidencia.gpsEstado = 'Autorizó';
+    mostrarUbicacion('ok', '✓ Ubicación activada (precisión ± ' + Math.round(p.coords.accuracy) + ' m).');
+    cerrarGuia(); promesaGps = null; actualizar();
+    if (YA_RECARGO) history.replaceState(null, '', location.pathname + location.search.replace(/[?&]ubicacion=1/, '').replace(/^&/, '?'));
+  }
+
+  // silencioso = el navegador negó sin mostrar aviso (bloqueo guardado o ubicación del sistema apagada).
+  function registrarFallo(e, origen, silencioso) {
+    const bloqueada = e.code === 1;
+    evidencia.gpsEstado = bloqueada ? 'No autorizó' : 'No disponible';
+    promesaGps = null; actualizar();
+    if (!bloqueada) {
+      mostrarUbicacion('mal', 'No pudimos leer tu ubicación. Enciende la ubicación del celular y vuelve a tocar el botón.');
+      if (origen !== 'auto') abrirGuia('apagada');
+      return;
+    }
+    if (botonNativo) {
+      mostrarUbicacion('mal', 'Toca el botón de ubicación para permitirla. Sin ella no podemos hacer efectiva tu firma.');
+      return;
+    }
+    if (NAV.ios && !YA_RECARGO) {
+      mostrarUbicacion('mal', 'No se dio permiso de ubicación. Toca «Activar mi ubicación» para que vuelva a aparecer el aviso.');
+      return;
+    }
+    mostrarUbicacion('mal', 'Tu navegador tiene la ubicación bloqueada para esta página.');
+    if (origen !== 'auto' || silencioso || YA_RECARGO) abrirGuia('bloqueada');
+  }
+
+  function salirDeLaApp() {
+    evidencia.gpsEstado = 'Abierto dentro de ' + NAV.app;
+    mostrarUbicacion('mal', 'Abriendo esta página en tu navegador para poder activar la ubicación…');
+    const destino = location.href;
+    if (NAV.android) {
+      location.href = 'intent://' + location.host + location.pathname + location.search + '#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=' + encodeURIComponent(destino) + ';end';
+    } else if (NAV.ios) {
+      location.href = 'x-safari-' + destino;
+    }
+    // Si la app no dejó salir, se muestra cómo abrirla a mano.
+    setTimeout(() => {
+      if (document.visibilityState === 'visible') {
+        mostrarUbicacion('mal', 'Abriste el link dentro de ' + NAV.app + ', que no deja compartir la ubicación.');
+        abrirGuia('app');
+      }
+    }, 2500);
+  }
+
+  function pedirUbicacion(origen) {
     if (evidencia.gps) return Promise.resolve();
     if (promesaGps) return promesaGps;
     intentosGps++;
-    if (NAV.app) {
-      evidencia.gpsEstado = 'Abierto dentro de ' + NAV.app;
-      mostrarUbicacion('mal', 'Abriste el link dentro de ' + NAV.app + ', que no deja compartir la ubicación.');
-      abrirGuia('app');
-      return Promise.resolve();
-    }
+    if (NAV.app) { salirDeLaApp(); return Promise.resolve(); }
     if (!navigator.geolocation) {
       evidencia.gpsEstado = 'Navegador sin GPS';
       mostrarUbicacion('mal', 'Este navegador no permite compartir la ubicación.');
       abrirGuia('sin-gps');
       return Promise.resolve();
     }
-    if (permisoGps === 'denied') {
-      // El navegador ya la tiene bloqueada para esta página: no va a volver a preguntar.
-      evidencia.gpsEstado = 'No autorizó';
-      mostrarUbicacion('mal', 'Tu navegador tiene la ubicación bloqueada para esta página.');
-      abrirGuia('bloqueada');
+    // iPhone con la ubicación negada: al recargar, Safari vuelve a mostrar el aviso.
+    if (origen === 'boton' && NAV.ios && permisoGps !== 'granted' && intentosGps > 1 && !YA_RECARGO) {
+      mostrarUbicacion('pidiendo', 'Volviendo a pedir el permiso…');
+      location.replace(location.pathname + (location.search ? location.search + '&' : '?') + 'ubicacion=1' + location.hash);
       return Promise.resolve();
     }
-    mostrarUbicacion('pidiendo', 'Pidiendo tu ubicación… si aparece un aviso, toca «Permitir».');
+    mostrarUbicacion('pidiendo', 'Pidiendo tu ubicación… en el aviso que aparece, toca «Permitir».');
+    const inicio = Date.now();
     promesaGps = new Promise((listo) => {
       let precisa = true;
-      const exito = (p) => {
-        evidencia.gps = { lat: p.coords.latitude, lng: p.coords.longitude, precision: p.coords.accuracy, hora: new Date(p.timestamp).toISOString() };
-        evidencia.gpsEstado = 'Autorizó';
-        mostrarUbicacion('ok', '✓ Ubicación activada (precisión ± ' + Math.round(p.coords.accuracy) + ' m).');
-        cerrarGuia(); promesaGps = null; actualizar(); listo();
-      };
       const fallo = (e) => {
         // Si el GPS tarda (por ejemplo bajo techo), se intenta una vez más con la ubicación aproximada del celular.
         if (e.code === 3 && precisa) {
           precisa = false;
-          navigator.geolocation.getCurrentPosition(exito, fallo, { enableHighAccuracy: false, timeout: 15000, maximumAge: 120000 });
+          navigator.geolocation.getCurrentPosition((p) => { registrarPosicion(p); listo(); }, fallo, { enableHighAccuracy: false, timeout: 15000, maximumAge: 120000 });
           return;
         }
-        const bloqueada = e.code === 1;
-        evidencia.gpsEstado = bloqueada ? 'No autorizó' : 'No disponible';
-        mostrarUbicacion('mal', bloqueada
-          ? 'No se dio permiso de ubicación. Sin ella no podemos hacer efectiva tu firma.'
-          : 'No pudimos obtener tu ubicación. Revisa que la ubicación del celular esté encendida.');
-        abrirGuia(bloqueada ? 'bloqueada' : 'apagada');
-        promesaGps = null; actualizar(); listo();
+        registrarFallo(e, origen, Date.now() - inicio < 800);
+        listo();
       };
-      navigator.geolocation.getCurrentPosition(exito, fallo, { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 });
+      navigator.geolocation.getCurrentPosition((p) => { registrarPosicion(p); listo(); }, fallo, { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 });
     });
     return promesaGps;
   }
-  $('activar-ubicacion').addEventListener('click', () => {
-    // Desde el segundo intento la guía se abre de inmediato, para que siempre pase algo visible al tocar el botón.
-    if (intentosGps > 0 && permisoGps !== 'prompt') abrirGuia(permisoGps === 'denied' ? 'bloqueada' : 'apagada');
-    pedirUbicacion();
-  });
-  // Si la persona ya había permitido la ubicación, se toma sin volver a preguntar; si la activa en ajustes
-  // mientras la página está abierta, también se toma sola.
-  if (navigator.permissions && navigator.permissions.query) {
-    navigator.permissions.query({ name: 'geolocation' }).then((p) => {
-      permisoGps = p.state;
-      if (p.state === 'granted') pedirUbicacion();
-      p.onchange = () => { permisoGps = p.state; if (p.state === 'granted') pedirUbicacion(); };
-    }).catch(() => {});
+  $('activar-ubicacion').addEventListener('click', () => pedirUbicacion('boton'));
+  $('ver-guia').addEventListener('click', () => abrirGuia(NAV.app ? 'app' : evidencia.gpsEstado === 'No disponible' ? 'apagada' : 'bloqueada'));
+
+  // Al abrir la página: se pide la ubicación de una vez (sale el aviso del navegador sin tocar nada).
+  // Si la persona la activa en ajustes con la página abierta, también se toma sola.
+  function pedirAlAbrir() {
+    if (NAV.app) { salirDeLaApp(); return; }
+    if (navigator.permissions && navigator.permissions.query) {
+      navigator.permissions.query({ name: 'geolocation' }).then((p) => {
+        permisoGps = p.state;
+        p.onchange = () => { permisoGps = p.state; if (p.state === 'granted') pedirUbicacion('auto'); };
+        if (p.state === 'denied' && botonNativo) { registrarFallo({ code: 1 }, 'auto', true); return; }
+        pedirUbicacion('auto');
+      }).catch(() => pedirUbicacion('auto'));
+    } else {
+      pedirUbicacion('auto');
+    }
   }
 
   /* Guía para activar la ubicación según el celular */
@@ -476,7 +540,7 @@
   }
   $('guia-cerrar').addEventListener('click', cerrarGuia);
   $('guia-recargar').addEventListener('click', () => location.reload());
-  $('guia-reintentar').addEventListener('click', () => { cerrarGuia(); pedirUbicacion(); });
+  $('guia-reintentar').addEventListener('click', () => { cerrarGuia(); pedirUbicacion('boton'); });
   $('guia-chrome').addEventListener('click', () => {
     location.href = 'intent://' + location.host + location.pathname + location.search + '#Intent;scheme=https;package=com.android.chrome;end';
   });
@@ -906,6 +970,9 @@
         actualizarBoton();
       });
   });
+
+  // Al final, cuando todo lo de la página ya existe: pedir la ubicación de una vez.
+  pedirAlAbrir();
 </script>
 </body>
 </html>
